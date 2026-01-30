@@ -5,10 +5,276 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
-
 datasource db {
   provider = "postgresql"
+}
+
+// ===========USER AUTHENTICATION AND AUTHORIZATION MODEL/ ROLE BASED ACCESS CONTROL ===========
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  USER
+}
+model User {
+  id String @id @default(uuid())
+  email String @unique
+  fullName String
+  phoneNumber String?
+  password String
+  isActive Boolean @default(true)
+  mustChangePassword Boolean @default(true)
+
+
+  role Role @default(USER)
+  refreshSessions RefreshSession[]
+  // === Reverse relations ===
+  fundRequestsCreated  FundRequest[] @relation("FundRequestRequestedBy")
+  fundRequestsApproved FundRequest[] @relation("FundRequestApprovedBy")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([fullName])
+  @@index([email])
+}
+
+model RefreshSession {
+  id           String   @id @default(uuid())
+  userId       String
+  refreshToken String   // hashed refresh token
+  deviceId     String
+  userAgent    String
+  ipAddress    String
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+  revokedAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceId])
+  @@index([expiresAt])
+}
+
+
+
+
+// model Role {
+//   id String @id @default(uuid())
+//   name String @unique // e.g SUPER_ADMIN, ADMIN, PM
+//   users User[]
+//   permissions RolePermission[]
+// }
+
+// model Permission {
+//   id String @id @default(uuid())
+//   code String @unique // e.g CREATE_USER, DISABLE_USER, EDIT_CONTRACT, FUNDS_REQUEST, 
+//   roles RolePermission[]
+// }
+
+// model RolePermission {
+//   id String
+//   roleId String
+//   permissionId String
+
+//   role Role @relation(fields: [roleId], references: [id])
+//   permission Permission @relation(fields: [permissionId], references: [id])
+
+//   @@id([roleId, permissionId])
+// }
+
+// ============================== PO Management Schema =============================
+model PurchaseOrder {
+  id           String   @id @default(uuid())
+  duid         String   
+
+  projectName  String? 
+  projectCode  String? 
+
+
+  prNumber     String?
+  poNumber     String?
+
+  poIssuedDate DateTime?
+  pm           String?
+
+  poLines      PurchaseOrderLine[]
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([duid, poNumber])
+  @@index([poNumber])
+  @@index([projectName])
+  @@index([projectCode])
+  @@index([poIssuedDate])
+  @@index([pm])
+}
+
+model PurchaseOrderLine {
+  id                String   @id @default(uuid())
+  purchaseOrderId   String
+
+  purchaseOrder     PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  poLineNumber      String?
+
+  itemCode          String?
+  itemDescription   String?
+  
+  poTypeId          String?
+  poType            PoType?   @relation(fields: [poTypeId], references: [id])
+
+  unitPrice         Decimal?  @db.Decimal(15, 2)
+  requestedQuantity Int?
+  poLineAmount        Decimal?  @db.Decimal(15, 2)
+
+  //=======FINANCIAL CONTROL
+  contractAmount Decimal? @db.Decimal(15, 2)
+  totalApprovedAmount Decimal @default(0) @db.Decimal(15, 2)
+  remainingBalance Decimal @default(0) @db.Decimal(15, 2)
+
+  poLineStatus PoLineStatus @default(NOT_INVOICED)
+  
+  FundRequests   FundRequest[]
+  contractAmendments    ContractAmendment[]
+
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([purchaseOrderId, poLineNumber])
+  @@index([purchaseOrderId])
+  @@index([poLineNumber])
+  @@index([itemCode])
+  @@index([unitPrice])
+  @@index([requestedQuantity])
+  @@index([poLineAmount])
+  @@index([poTypeId])
+  @@index([poLineStatus])
+
+
+  }
+
+  //==PO LINE LIFE CYCLE STATUS===
+  enum PoLineStatus {
+    NOT_INVOICED
+    INVOICED
+  }
+
+model PoType {
+  id          String           @id @default(uuid())
+  code        String           @unique
+  name        String
+  description String?
+
+  purchaseOrders PurchaseOrderLine[]
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([name, code])
+}
+
+// ================PURCHASE ORDER IMPORT HISTORY
+model PoImportHistory {
+  id           String   @id @default(uuid())
+  fileName     String
+  duidCount    Int
+  poCount      Int
+  poLineCount  Int
+  status       String   // e.g. "SUCCESS", "PARTIAL", "FAILED"
+  errors       Json?  // JSON string or text for errors
+
+  createdBy    String?  // optional userId
+  createdAt    DateTime @default(now())
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ============ FUND REQUESTS ============
+
+model FundRequest {
+  id                  String   @id @default(uuid())
+  purchaseOrderLineId String
+
+  purchaseOrderLine   PurchaseOrderLine @relation(fields: [purchaseOrderLineId], references: [id], onDelete: Cascade)
+
+  requestedAmount     Decimal  @db.Decimal(15, 2)
+
+  // Intent / reason for this specific fund request
+  requestPurpose      String
+
+  status              FundRequestStatus @default(PENDING)
+
+  requestedBy         String
+  requestedByUser User @relation("FundRequestRequestedBy", fields: [requestedBy], references: [id])
+
+  approvedBy          String?
+  approvedByUser User? @relation("FundRequestApprovedBy", fields: [approvedBy], references: [id])
+
+  approvedAt          DateTime?
+  rejectionReason     String?
+
+  createdAt           DateTime @default(now())
+
+  notifications       Notification[]
+
+  @@index([purchaseOrderLineId])
+  @@index([status])
+  @@index([requestedBy])
+}
+
+enum FundRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ============ CONTRACT AMENDMENTS (AUDIT) ============
+
+model ContractAmendment {
+  id                  String   @id @default(uuid())
+  purchaseOrderLineId String
+
+  purchaseOrderLine   PurchaseOrderLine @relation(fields: [purchaseOrderLineId], references: [id], onDelete: Cascade)
+
+  oldAmount           Decimal  @db.Decimal(15, 2)
+  newAmount           Decimal  @db.Decimal(15, 2)
+
+  reason              String
+  approvedBy          String
+
+  createdAt           DateTime @default(now())
+
+  @@index([purchaseOrderLineId])
+}
+
+// ============ NOTIFICATIONS ============
+
+model Notification {
+  id             String   @id @default(uuid())
+  userId         String
+
+  fundRequestId  String?
+  fundRequest    FundRequest? @relation(fields: [fundRequestId], references: [id], onDelete: Cascade)
+
+  type           NotificationType
+  payload        Json
+
+  sentAt         DateTime?
+  createdAt      DateTime @default(now())
+
+  @@index([userId])
+  @@index([type])
+}
+
+enum NotificationType {
+  FUND_REQUEST_CREATED
+  FUND_REQUEST_APPROVED
+  FUND_REQUEST_REJECTED
+  CONTRACT_AMENDED
 }
