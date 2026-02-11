@@ -18,6 +18,8 @@ import CreateStaffAccountPage from "./features/staffs/CreateStaffAccountPage";
 import NotificationPage from "./features/notification/NotificationPage";
 import { tokenService } from "./api/tokenService";
 import AdminFundRequestDashboard from "./features/fundRequests/admins/AdminFundRequestDashboard";
+import PmPoftLandingPage from "./features/pmLandingPage/PmlandingPage";
+import PmLayout from "./features/pmLandingPage/PmLayout";
 
 function App() {
   const { isAuthenticated, user, isInitialLoading, setAuth, clearAuth, finishLoading } =
@@ -82,11 +84,13 @@ function App() {
           path="/pm"
           element={
             <ProtectedRoute allowedRoles={["PM", "USER"]}>
-              <RootLayout />
+              {/*<RootLayout />*/}
+              <PmLayout />
             </ProtectedRoute>
           }
         >
-          <Route index element={<div>PM Dashboard</div>} />
+          <Route index element={<PmPoftLandingPage />} />
+          <Route path="fund-request/new" element={<PmRequestPage />} />
           <Route
             path="po-aging-days-mobile"
             element={<PoAgingDaysMobile currentPmId="PM001" currentPmName="John Doe" />}
@@ -95,7 +99,6 @@ function App() {
 
         {/* 4. SHARED PROTECTED ROUTES */}
         <Route element={<ProtectedRoute />}>
-          <Route path="/fund-request/new" element={<PmRequestPage />} />
           <Route path="/notification" element={<NotificationPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
         </Route>
