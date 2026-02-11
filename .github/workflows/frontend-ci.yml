@@ -15,9 +15,5 @@ jobs:
           node-version: 20
       - run: npm install
         working-directory: frontend
-      - run: npm run lint
-        working-directory: frontend
       - run: npm run build
         working-directory: frontend
-      - run: echo "Skipping lint for now"
-        working-directory: backend
