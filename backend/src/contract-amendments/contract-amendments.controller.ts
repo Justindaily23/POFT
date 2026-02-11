@@ -5,7 +5,7 @@ import { CreateContractAmendmentDto } from './dto/create-contract-amendment.dto'
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth-guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
-import { RoleName } from 'src/auth/eums/role-name.enums';
+import { AuthRole } from 'src/auth/enums/auth-name.enums';
 
 @Controller('contract-amendments')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -13,7 +13,8 @@ export class ContractAmendmentsController {
   constructor(private readonly contractAmendmentsService: ContractAmendmentsService) {}
 
   @Post()
-  @Roles(RoleName.SUPER_ADMIN, RoleName.ADMIN)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AuthRole.SUPER_ADMIN, AuthRole.ADMIN)
   async create(@Body() dto: CreateContractAmendmentDto, @Request() req) {
     return this.contractAmendmentsService.createAmendment(dto, req.user.id);
   }

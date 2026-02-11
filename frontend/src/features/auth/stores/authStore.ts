@@ -1,44 +1,55 @@
 import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 import type { RoleName } from "@/enums/roles";
 
 interface AuthUser {
-    id: string;
-    email: string;
-    role: RoleName;
-    mustChangePassword: boolean;
+  id: string;
+  email: string;
+  role: RoleName;
+  mustChangePassword: boolean;
 }
-
 interface AuthState {
-    user: AuthUser | null;
-    token: string | null;
-    isAuthenticated: boolean;
-    isInitialLoading: boolean; // NEW
-    setAuth: (payload: { token: string; user: AuthUser }) => void;
-    clearAuth: () => void;
-    finishLoading: () => void; // NEW
+  user: AuthUser | null;
+  token: string | null;
+  isAuthenticated: boolean;
+  isInitialLoading: boolean; // NEW
+  setAuth: (payload: { token: string; user: AuthUser }) => void;
+  clearAuth: () => void;
+  finishLoading: () => void; // NEW
 }
-export const useAuthStore = create<AuthState>((set) => ({
-    user: null,
-    token: localStorage.getItem("token"),
-    // If a token exists in storage, we are "authenticated" but must "load" to verify it
-    isAuthenticated: !!localStorage.getItem("token"), // pre-fill
-    isInitialLoading: true,
-    setAuth: ({ token, user }) => {
-        localStorage.setItem("token", token);
-        localStorage.setItem("user", JSON.stringify(user)); // <-- add this
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      user: null,
+      token: null,
+      isAuthenticated: false,
+      isInitialLoading: true, // Always start true to block ProtectedRoute
 
+      setAuth: ({ token, user }) => {
         set({
-            token,
-            user,
-            isAuthenticated: true,
-            isInitialLoading: false, // Stop loading once we have the user
+          token,
+          user,
+          isAuthenticated: true,
+          isInitialLoading: false,
         });
-    },
+      },
 
-    clearAuth: () => {
-        localStorage.removeItem("token");
+      clearAuth: () => {
         set({ user: null, token: null, isAuthenticated: false, isInitialLoading: false });
-    },
+        //localStorage.removeItem("auth-storage"); // Clear the persisted data
+      },
 
-    finishLoading: () => set({ isInitialLoading: false }),
-}));
+      finishLoading: () => set({ isInitialLoading: false }),
+    }),
+    {
+      name: "auth-storage", // Unique name for localStorage key
+      storage: createJSONStorage(() => localStorage),
+      // Only persist these fields (don't persist the loading state)
+      partialize: (state) => ({
+        user: state.user,
+        token: state.token,
+        isAuthenticated: !!state.token,
+      }),
+    },
+  ),
+);

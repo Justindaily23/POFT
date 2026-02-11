@@ -14,7 +14,7 @@ const cleanNumeric = ({ value }) => {
 const trimString = ({ value }) => (typeof value === 'string' ? value.trim() : value);
 
 export class CreateFundRequestDto {
-  @IsUUID() // 2026 Best Practice: Validate format if it's always a UUID
+  @IsString() // 2026 Best Practice: Validate format if it's always a UUID
   @IsNotEmpty()
   duid: string;
 
@@ -85,6 +85,11 @@ export class CreateFundRequestDto {
   @IsOptional()
   @Transform(trimString)
   pm?: string;
+
+  @IsString()
+  @IsOptional()
+  @Transform(trimString)
+  pmId?: string;
 
   @IsNumber() // FIXED: Changed from @IsString to @IsNumber because it's an amount
   @IsNotEmpty()

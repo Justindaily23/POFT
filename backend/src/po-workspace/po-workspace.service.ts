@@ -9,18 +9,31 @@ import { PurchaseOrderLine } from './dto/po-workspace.response.dto';
 export class PoWorkspaceService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async getPoTypes() {
+    return this.prisma.poType.findMany({
+      select: {
+        id: true,
+        name: true,
+        code: true,
+      },
+      // Using the index you defined for high-performance sorting
+      orderBy: {
+        name: 'asc',
+      },
+    });
+  }
   async getWorkspace(filters: PoWorkspaceFilterDto): Promise<PoWorkspaceResponse> {
     const { page = 1, limit = 20 } = filters; // default pagination
 
     // --- Build line-level where filter ---
     const lineWhere: Prisma.PurchaseOrderLineWhereInput = {
       poType: filters.poTypes?.length ? { code: { in: filters.poTypes } } : undefined,
+      pm: filters.pm ? { contains: filters.pm, mode: 'insensitive' } : undefined,
       purchaseOrder: {
         duid: filters.duid ? { contains: filters.duid, mode: 'insensitive' } : undefined,
         poNumber: filters.poNumber ? { contains: filters.poNumber, mode: 'insensitive' } : undefined,
         projectName: filters.projectName ? { contains: filters.projectName, mode: 'insensitive' } : undefined,
         projectCode: filters.projectCode ? { contains: filters.projectCode, mode: 'insensitive' } : undefined,
-        pm: filters.pm ? { contains: filters.pm, mode: 'insensitive' } : undefined,
       },
     };
 
@@ -39,12 +52,14 @@ export class PoWorkspaceService {
         contractAmount: true,
         requestedQuantity: true,
         poLineStatus: true,
+        pm: true,
+        allowedOpenDays: true,
         itemCode: true,
         unitPrice: true,
         itemDescription: true,
         poType: { select: { code: true } },
         purchaseOrder: {
-          select: { duid: true, poNumber: true, prNumber: true, projectCode: true, projectName: true, pm: true },
+          select: { duid: true, poNumber: true, prNumber: true, projectCode: true, projectName: true },
         },
         FundRequests: { select: { requestedAmount: true, status: true } },
       },
@@ -65,17 +80,18 @@ export class PoWorkspaceService {
       return {
         id: line.id,
         duid: line.purchaseOrder.duid,
-        poNumber: line.purchaseOrder.poNumber ?? '',
-        prNumber: line.purchaseOrder.prNumber ?? '',
-        projectCode: line.purchaseOrder.projectCode ?? '',
-        projectName: line.purchaseOrder.projectName ?? '',
-        pm: line.purchaseOrder.pm ?? '',
+        poNumber: line.purchaseOrder.poNumber ?? 'N/A',
+        prNumber: line.purchaseOrder.prNumber ?? 'N/A',
+        projectCode: line.purchaseOrder.projectCode ?? 'N/A',
+        projectName: line.purchaseOrder.projectName ?? 'N/A',
+        pm: line.pm ?? 'N/A',
         poLineNumber: Number(line.poLineNumber),
-        poType: line.poType?.code ?? '',
+        poType: line.poType?.code ?? 'N/A',
         unitPrice: Number(line.unitPrice) ?? 0,
         requestedQuantity: line.requestedQuantity ?? 0,
         poLineAmount: Number(line.poLineAmount) ?? 0,
-        itemDescription: line.itemDescription ?? '',
+        allowedAgingDays: line.allowedOpenDays ?? 1,
+        itemDescription: line.itemDescription ?? 'N/A',
         contractAmount: line.contractAmount ? Number(line.contractAmount) : null,
         status: line.poLineStatus,
         amountRequested: totalRequested,

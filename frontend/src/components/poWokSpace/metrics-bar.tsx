@@ -54,27 +54,27 @@ export function MetricsBar({ metrics, rowCount, totalCount }: MetricsBarProps) {
             color:
                 metrics.balanceDue > 0
                     ? "text-red-600 dark:text-red-500 font-bold" // Sharp red with high contrast
-                    : "text-primary",
+                    : "text-red-600 dark:text-red-500 font-bold",
         },
     ];
 
     return (
-        <div className="bg-secondary/50 border-b border-border">
-            <div className="px-4 py-10">
+        <div className="bg-secondary/95 border-b border-border">
+            <div className="px-4 py-4">
                 <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                         <span className="text-md font-medium text-muted-foreground">Financial Summary</span>
-                        <span className="text-xs text-muted-foreground">•</span>
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-lg text-accent-foreground">•</span>
+                        <span className="text-xs text-accent-foreground">
                             Showing <span className="text-foreground font-medium">{rowCount.toLocaleString()}</span> of{" "}
                             <span className="text-foreground font-medium">{totalCount.toLocaleString()}</span> lines
                         </span>
                     </div>
                     <div className="flex items-center gap-1">
                         {/* Changed bg-primary to bg-green-500 */}
-                        <div className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+                        <div className="h-1.5 w-1.5 rounded-full bg-green-950 animate-pulse" />
                         {/* Changed text-muted-foreground to text-green-600 */}
-                        <span className="text-xs text-green-600">Live</span>
+                        <span className="text-md text-green-700">Live</span>
                     </div>
                 </div>
 
@@ -83,9 +83,9 @@ export function MetricsBar({ metrics, rowCount, totalCount }: MetricsBarProps) {
                         <div key={item.label} className="bg-card  rounded-md border border-border px-3 py-2">
                             <div className="flex items-center gap-2 mb-1">
                                 <item.icon className={`h-3.5 w-3.5 ${item.color}`} />
-                                <span className="text-md text-muted-foreground truncate">{item.label}</span>
+                                <span className="text-md text-accent-foreground truncate">{item.label}</span>
                             </div>
-                            <div className={`text-lg font-semibold ${item.color}`}>{item.value}</div>
+                            <div className={`text-lg font-bold ${item.color}`}>{item.value}</div>
                         </div>
                     ))}
                 </div>

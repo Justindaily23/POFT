@@ -1,5 +1,5 @@
 // src/fund-requests/dto/approve-fund-request.dto.ts
-import { IsString, IsNotEmpty, IsOptional, IsEnum, ValidateIf } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsEnum, ValidateIf, IsNumber, Min } from 'class-validator';
 
 export enum ApprovalAction {
   APPROVE = 'APPROVE',
@@ -14,4 +14,10 @@ export class ApproveFundRequestDto {
   @IsString()
   @IsOptional()
   rejectionReason?: string; // Required if action === REJECT
+
+  @ValidateIf((o) => o.action === ApprovalAction.APPROVE)
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  setContractAmount?: number;
 }

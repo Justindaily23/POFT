@@ -1,39 +1,48 @@
 import apiClient from "./axios";
+import { tokenService } from "./tokenService";
 
 export interface LoginRequest {
-    email: string;
-    password: string;
+  email: string;
+  password: string;
 }
 
 export interface LoginResponse {
-    id: string;
-    email: string;
-    accessToken: string;
-    role: "SUPER_ADMIN" | "ADMIN" | "PM" | "USER";
-    mustChangePassword: boolean;
+  id: string;
+  email: string;
+  accessToken: string;
+  role: "SUPER_ADMIN" | "ADMIN" | "USER";
+  mustChangePassword: boolean;
 }
 
 export const authApi = {
-    login: async (data: LoginRequest & { deviceId?: string }): Promise<LoginResponse> => {
-        const response = await apiClient.post("/auth/login", data);
-        return response.data;
-    },
+  login: async (data: LoginRequest & { deviceId?: string }): Promise<LoginResponse> => {
+    tokenService.clearToken(); // clear old token first
+    const response = await apiClient.post("/auth/login", data);
+    const loginData = response.data;
 
-    logout: async () => {
-        await apiClient.post("/auth/logout");
-        localStorage.removeItem("token");
-    },
+    // Save the accessToken for future requests
+    if (loginData.accessToken) {
+      tokenService.setToken(loginData.accessToken);
+    }
 
-    resetPassword: async (oldPassword: string, newPassword: string) => {
-        const response = await apiClient.post("/auth/reset-password", {
-            oldPassword,
-            newPassword,
-        });
-        return response.data;
-    },
+    return loginData;
+  },
 
-    getCurrentUser: async () => {
-        const response = await apiClient.get("api/v1/auth/me");
-        return response.data;
-    },
+  logout: async () => {
+    await apiClient.post("/auth/logout");
+    localStorage.removeItem("token");
+  },
+
+  resetPassword: async (oldPassword: string, newPassword: string) => {
+    const response = await apiClient.post("/auth/reset-password", {
+      oldPassword,
+      newPassword,
+    });
+    return response.data;
+  },
+
+  getCurrentUser: async () => {
+    const response = await apiClient.get("/auth/me");
+    return response.data;
+  },
 };

@@ -1,4 +1,4 @@
-import { Body, Controller, Header, Headers, Ip, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Ip, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { ResetPasswordDto } from './dto/reset-password.dto';
@@ -44,5 +44,15 @@ export class AuthController {
   async resetPassword(@Req() req, @Body() dto: ResetPasswordDto) {
     const userId = req.user.id;
     return this.authService.resetPassword(userId, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('me')
+  async getCurrentUser(@Req() req) {
+    // req.user is populated by the JwtStrategy
+    return {
+      userData: req.user,
+      accessToken: req.headers.authorization?.split(' ')[1], // Return current token
+    };
   }
 }

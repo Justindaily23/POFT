@@ -1,7 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
-import { logger } from './common/logger/logger';
+import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import { ConfigService } from '@nestjs/config';
 
@@ -15,13 +14,14 @@ async function bootstrap() {
   const allowedOrigins = configService.get<string>('ALLOWED_ORIGINS')?.split(',') || [];
 
   app.enableCors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
+    // origin: (origin, callback) => {
+    //   if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+    //     callback(null, true);
+    //   } else {
+    //     callback(new Error('Not allowed by CORS'));
+    //   }
+    // },
+    origin: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     credentials: true,
     maxAge: 3600,
@@ -32,22 +32,24 @@ async function bootstrap() {
   app.use(cookieParser());
 
   app.setGlobalPrefix('api/v1');
-  // Global validation pipes
-  app.useGlobalPipes(
+
+  // Global logger
+  (app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      // Add this to simplify error messages for your toast
+      exceptionFactory: (errors) => {
+        const messages = errors.map((error) => Object.values(error.constraints || {}).join(', '));
+        return new BadRequestException(messages[0]); // Returns just the first error string
+      },
     }),
-  );
+  ),
+    // Note: Only use this guard on protected routes
+    // app.useGlobalGuards(new MustChangePasswordGuard());
 
-  // Global logger
-  app.useLogger(logger);
-
-  // Note: Only use this guard on protected routes
-  // app.useGlobalGuards(new MustChangePasswordGuard());
-
-  await app.listen(port, '0.0.0.0');
+    await app.listen(port, '0.0.0.0'));
   console.log(`Application running on${await app.getUrl()}`);
 }
 bootstrap();

@@ -17,6 +17,9 @@ import { ContractAmendmentsService } from './contract-amendments/contract-amendm
 import { BullModule } from '@nestjs/bull';
 import { FundRequestsModule } from './fund-requests/fund-requests.module';
 import { PoWorkspaceModule } from './po-workspace/po-workspace.module';
+import { PoAgingDaysModule } from './po-aging-days/po-aging-days.module';
+import { MetadataModule } from './metadata/metadata.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -27,7 +30,7 @@ import { PoWorkspaceModule } from './po-workspace/po-workspace.module';
       validationOptions: {
         abortEarly: false, // Report all validation errors and not just the first one
       },
-      envFilePath: ['.env', `.env.${process.env.NODE_ENV}`], // Load environment variables from .env file based on NODE_ENV
+      envFilePath: ['.env', `.env.${process.env.NODE_ENV || 'development'}`], // Load environment variables from .env file based on NODE_ENV
       cache: true, // Cache the configuration to improve performance
     }),
     // Configure MailerModule here
@@ -43,22 +46,41 @@ import { PoWorkspaceModule } from './po-workspace/po-workspace.module';
           },
         },
         defaults: {
-          from: '"No Reply" <noreply@example.com>',
+          from: '"Finance System" <noreply@fitflexnaija.ng>',
         },
       }),
     }),
-    BullModule.forRoot({
-      redis: { host: 'localhost', port: 6379 },
+    BullModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        redis: {
+          host: config.get('REDIS_HOST'),
+          port: config.get<number>('REDIS_PORT') || 6379,
+          password: config.get('REDIS_PASSWORD'),
+          db: config.get<number>('REDIS_DB') || 0,
+          tls: {
+            rejectUnauthorized: false,
+          },
+          maxRetriesPerRequest: null,
+        },
+      }),
     }),
+    BullModule.registerQueue({
+      name: 'notifications',
+    }),
+
     FundRequestsModule,
+    NotificationsModule,
     AuthModule,
     UserModule,
     PurchaseOrdersModule,
     PrismaModule,
     ScheduleModule.forRoot(),
-    PoWorkspaceModule, // enabels cron jobs
+    PoWorkspaceModule,
+    PoAgingDaysModule,
+    MetadataModule, // enabels cron jobs
   ],
   controllers: [AppController],
-  providers: [AppService, CleanupService, NotificationsService, ContractAmendmentsService],
+  providers: [AppService, CleanupService, ContractAmendmentsService],
 })
 export class AppModule {}

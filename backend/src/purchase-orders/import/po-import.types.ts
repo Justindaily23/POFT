@@ -1,18 +1,19 @@
 export interface PoExcelRow {
   duid: string;
   poNumber: string;
-  poType: string;
-
   projectName: string;
   projectCode: string;
   prNumber: string;
-  poIssuedDate: string;
+
+  poType: string;
+  poIssuedDate: Date;
   pm: string;
+  pmId: string;
 
   poLineNumber: string;
+  allowedOpenDays: number;
   itemCode: string;
   itemDescription: string;
   unitPrice: number;
-  poLineAmount: number;
   requestedQuantity: number;
 }

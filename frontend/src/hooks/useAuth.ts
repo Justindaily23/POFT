@@ -40,12 +40,18 @@ export const useAuth = () => {
             navigate("/", { replace: true });
         },
         onError: (error: any) => {
-            // Handle the "null" return from your validateUser by checking for 401/404
-            const message = error.response?.data?.message || "Login failed";
+            // 1. Get the raw message (could be a string OR an array of strings)
+            const rawMessage = error.response?.data?.message || "Login failed";
+
+            // 2. Convert to a string so the Toast can actually display it
+            const displayMessage = Array.isArray(rawMessage)
+                ? rawMessage[0] // Take the first error (e.g., "Email is required")
+                : rawMessage;
+
             toast({
                 variant: "destructive",
                 title: "Authentication Failed",
-                description: message,
+                description: displayMessage, // Now it will show!
             });
         },
     });

@@ -78,19 +78,19 @@ export function PODataTable({ data }: PODataTableProps) {
                 accessorKey: "duid",
                 header: ({ column }) => <SortableHeader column={column} title="DUID" />,
                 cell: ({ row }) => <span className="font-mono text-xs">{row.getValue("duid")}</span>,
-                size: 100,
+                size: 120,
             },
             {
                 accessorKey: "poNumber",
                 header: ({ column }) => <SortableHeader column={column} title="PO Number" />,
                 cell: ({ row }) => <span className="font-mono text-xs text-primary">{row.getValue("poNumber")}</span>,
-                size: 120,
+                size: 50,
             },
             {
                 accessorKey: "projectCode",
                 header: ({ column }) => <SortableHeader column={column} title="Project Code" />,
                 cell: ({ row }) => <span className="font-mono text-xs">{row.getValue("projectCode")}</span>,
-                size: 100,
+                size: 50,
             },
             {
                 accessorKey: "projectName",
@@ -100,19 +100,19 @@ export function PODataTable({ data }: PODataTableProps) {
                         {row.getValue("projectName")}
                     </span>
                 ),
-                size: 180,
+                size: 50,
             },
             {
                 accessorKey: "pm",
                 header: ({ column }) => <SortableHeader column={column} title="PM" />,
                 cell: ({ row }) => <span className="text-xs">{row.getValue("pm")}</span>,
-                size: 100,
+                size: 80,
             },
             {
                 accessorKey: "poLineNumber",
-                header: ({ column }) => <SortableHeader column={column} title="Line #" />,
+                header: ({ column }) => <SortableHeader column={column} title="Line" />,
                 cell: ({ row }) => <span className="text-xs text-center block">{row.getValue("poLineNumber")}</span>,
-                size: 60,
+                size: 50,
             },
             {
                 accessorKey: "poType",
@@ -120,7 +120,7 @@ export function PODataTable({ data }: PODataTableProps) {
                 cell: ({ row }) => (
                     <span className="text-xs px-1.5 py-0.5 bg-secondary rounded text-secondary-foreground">{row.getValue("poType")}</span>
                 ),
-                size: 100,
+                size: 80,
             },
             {
                 accessorKey: "unitPrice",
@@ -142,7 +142,7 @@ export function PODataTable({ data }: PODataTableProps) {
                         {formatCurrency(row.getValue("poLineAmount"))}
                     </span>
                 ),
-                size: 120,
+                size: 100,
             },
             {
                 id: "select",
@@ -168,7 +168,7 @@ export function PODataTable({ data }: PODataTableProps) {
                         onChange={row.getToggleSelectedHandler()}
                     />
                 ),
-                size: 30,
+                size: 20,
             },
 
             {
@@ -179,7 +179,7 @@ export function PODataTable({ data }: PODataTableProps) {
                         {row.getValue("itemDescription")}
                     </span>
                 ),
-                size: 200,
+                size: 140,
             },
             {
                 id: "contractAmount",
@@ -187,7 +187,7 @@ export function PODataTable({ data }: PODataTableProps) {
                 cell: ({ row }) => {
                     // row.id is now your database ID
                     const dbId = row.id;
-                    const currentAmount = contractAmounts[dbId] ?? row.original.poLineAmount ?? 0;
+                    const currentAmount = contractAmounts[dbId] ?? 0;
 
                     return (
                         <div className="flex justify-end">
@@ -195,12 +195,12 @@ export function PODataTable({ data }: PODataTableProps) {
                                 className="text-xs font-mono px-2 py-1 rounded hover:bg-gray-100 transition-colors border border-transparent hover:border-gray-200"
                                 onClick={() => setEditingData(row.original)} // Pass whole row to modal/popover
                             >
-                                {currentAmount > 0 ? formatCurrency(currentAmount) : "Set Amount —"}
+                                {currentAmount > 0 ? formatCurrency(currentAmount) : "Set Amount"}
                             </button>
                         </div>
                     );
                 },
-                size: 140,
+                size: 100,
             },
 
             {
@@ -223,7 +223,7 @@ export function PODataTable({ data }: PODataTableProps) {
                         </select>
                     );
                 },
-                size: 120,
+                size: 80,
             },
         ],
         [],
@@ -251,11 +251,11 @@ export function PODataTable({ data }: PODataTableProps) {
                 <table className="w-full border-collapse min-w-300">
                     <thead className="sticky top-0 z-10">
                         {table.getHeaderGroups().map((headerGroup) => (
-                            <tr key={headerGroup.id} className="bg-secondary">
+                            <tr key={headerGroup.id} className="bg-gray-300">
                                 {headerGroup.headers.map((header) => (
                                     <th
                                         key={header.id}
-                                        className="px-3 py-2 text-left text-xs font-medium text-muted-foreground border-b border-r border-border last:border-r-0"
+                                        className="px-3 py-2 text-left text-xs font-bold text-secondary-foreground border-b border-r border-border last:border-r-0"
                                         style={{ width: header.getSize() }}
                                     >
                                         {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
@@ -297,7 +297,7 @@ export function PODataTable({ data }: PODataTableProps) {
 
             {editingData && (
                 <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-                    <div className="bg-white dark:bg-slate-900 border shadow-2xl rounded-xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
+                    <div className="bg-white dark:bg-slate-400 border shadow-2xl rounded-xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
                         {/* Modal Header */}
                         <div className="p-4 border-b bg-muted/30">
                             <h3 className="text-sm font-bold uppercase tracking-tight">Edit Contract</h3>

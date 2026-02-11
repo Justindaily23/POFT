@@ -40,7 +40,7 @@ async function bootstrap() {
         description: 'Covers bundled services offered as a single commercial unit.',
       },
       {
-        name: 'Site Visit',
+        name: 'Site Revisit',
         description: 'Covers follow-up visits, inspections, or corrective actions.',
       },
       {
@@ -55,19 +55,26 @@ async function bootstrap() {
         name: 'FTTH',
         description: 'Covers procurement of physical goods or materials.',
       },
+      {
+        name: 'Survey',
+        description: 'Covers site mapping',
+      },
     ];
 
-    await prisma.$transaction(async (tx) => {
-      for (const type of poTypes) {
-        const code = type.name.toUpperCase().replace(/\s+/g, '_');
+    for (const type of poTypes) {
+      const code = type.name.toUpperCase().replace(/\s+/g, '_');
 
-        await tx.poType.upsert({
-          where: { code },
-          update: {},
-          create: { id: randomUUID(), ...type, code },
-        });
-      }
-    });
+      // No $transaction wrapper - much more stable for cloud
+      await prisma.poType.upsert({
+        where: { code },
+        update: {}, // Don't change anything if it already exists
+        create: {
+          id: randomUUID(),
+          ...type,
+          code,
+        },
+      });
+    }
 
     console.log('✅ PO Types seeded successfully');
   } catch (error) {

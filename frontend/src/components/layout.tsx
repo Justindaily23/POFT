@@ -4,17 +4,12 @@ import { ThemeProvider } from "@/components/theme-provider";
 import "@/index.css";
 
 export default function RootLayout() {
-  return (
-    <ThemeProvider
-      attribute="class"
-      defaultTheme="system"
-      enableSystem
-      disableTransitionOnChange
-    >
-      {/* This renders POFinancialWorkspace or any other child route */}
-      <Outlet />
+    return (
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={true} disableTransitionOnChange>
+            {/* This renders POFinancialWorkspace or any other child route */}
+            <Outlet />
 
-      <Analytics />
-    </ThemeProvider>
-  );
+            <Analytics />
+        </ThemeProvider>
+    );
 }

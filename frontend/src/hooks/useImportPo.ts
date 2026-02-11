@@ -1,30 +1,37 @@
 // src/hooks/useImportPO.ts
-import { useMutation, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { importPurchaseOrders } from "@/features/poWorkspace/poWorkspace.api";
-import type { ImportResult } from "@/lib/po-workspace/types";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "@/hooks/use-toast";
 
-export function useImportPO(): UseMutationResult<ImportResult, any, File, unknown> {
+export function useImportPO() {
     const queryClient = useQueryClient();
 
     return useMutation({
         mutationFn: (file: File) => importPurchaseOrders(file),
-        onSuccess: (result: ImportResult) => {
+        onSuccess: (result) => {
+            // Invalidate to refresh the table
             queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
 
-            // Only show import summary
-            toast({
-                title: `PO Import complete: ${result.poSucceeded} succeeded, ${result.poFailed} failed.`,
-                description: `${result.linesCreated} lines created, ${result.linesUpdated} updated.`,
-            });
+            if (result.status === "SUCCESS") {
+                toast({
+                    title: "Import Successful",
+                    description: `Successfully processed ${result.poSucceeded} POs (${result.linesProcessed} lines).`,
+                });
+            } else {
+                // PARTIAL success (some rows failed)
+                toast({
+                    variant: "destructive",
+                    title: "Import Completed with Errors",
+                    description: `${result.poFailed} POs failed to import. See details below.`,
+                });
+            }
         },
         onError: (error: any) => {
-            console.error("PO Import failed", error);
-
-            // Show error toast
+            const message = error?.response?.data?.message || "Connection to server failed";
             toast({
-                title: "PO Import failed",
-                description: error?.message || "Unknown error",
+                variant: "destructive",
+                title: "Upload Failed",
+                description: message,
             });
         },
     });

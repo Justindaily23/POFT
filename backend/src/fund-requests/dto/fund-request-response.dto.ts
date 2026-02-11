@@ -1,22 +1,28 @@
 export class FundRequestResponseDto {
-  id: string;
+  poLineId: string;
   status: string;
   requestedAmount: number;
-  requestPurpose: string;
   contractAmount: number | null;
+  cumulativeApprovedAmount: number;
+  remainingBalance: number;
+  isNegotiationRequired: boolean;
 
   duid: string;
-  projectName: string | null;
-  projectCode: string | null;
   poNumber: string | null;
   prNumber: string | null;
+  projectName: string | null;
+  projectCode: string | null;
   poLineNumber: string | null;
   poTypeId: string | null;
-  poIssuedDate: Date | null;
-  pm: string | null;
+  requestPurpose: string;
+  createdAt: Date;
+
   itemDescription: string | null;
   itemCode: string | null;
   unitPrice: number | null;
   requestedQuantity: number | null;
   poLineAmount: number | null;
+  poIssuedDate: Date | null;
+  pm: string | null;
+  pmId: string | null;
 }

@@ -8,7 +8,7 @@ import {
 import { PrismaService } from 'src/prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
-import { Role } from '@prisma/client';
+import { AuthRole } from '@prisma/client';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { logger } from 'src/common/logger/logger';
 import { randomBytes } from 'crypto';
@@ -19,14 +19,14 @@ import { Response } from 'express';
 
 export interface AuthenticatedUser {
   id: string;
-  role: Role;
+  role: AuthRole;
   email: string;
   mustChangePassword: boolean;
 }
 
 export interface JwtPayload {
   sub: string;
-  role: Role;
+  role: AuthRole;
   email: string;
   mustChangePassword?: Boolean;
 }
@@ -108,8 +108,10 @@ export class AuthService {
     // Set refresh cookie
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
+      // 'none' is required for cross-origin (Frontend on port A, Backend on port B)
+      sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'none',
+      // 'secure: true' is MANDATORY if sameSite is 'none'
+      secure: process.env.NODE_ENV === 'production' ? true : true,
       expires: expiresAt,
     });
 
@@ -246,7 +248,7 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(dto.newPassword, 12);
 
     await this.prisma.$transaction([
-      //  Update password + unlock account
+      // 1. Update password and remove the force-change flag
       this.prisma.user.update({
         where: { id: userId },
         data: {
@@ -254,15 +256,12 @@ export class AuthService {
           mustChangePassword: false,
         },
       }),
-
-      //  Invalidate all refresh sessions
+      // 2. IMPORTANT: Invalidate all sessions globally after password change
       this.prisma.refreshSession.deleteMany({
         where: { userId },
       }),
     ]);
 
-    return {
-      message: 'Password reset successful. Please login again.',
-    };
+    return { message: 'Password updated successfully. Please log in again.' };
   }
 }

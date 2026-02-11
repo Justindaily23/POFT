@@ -8,7 +8,7 @@ import { extname } from 'path';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth-guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
-import { RoleName } from 'src/auth/eums/role-name.enums';
+import { AuthRole } from 'src/auth/enums/auth-name.enums';
 
 @Controller('purchase-orders')
 export class PoImportController {
@@ -19,7 +19,7 @@ export class PoImportController {
 
   @Post('import')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(RoleName.ADMIN, RoleName.SUPER_ADMIN)
+  @Roles(AuthRole.ADMIN, AuthRole.SUPER_ADMIN)
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
@@ -51,7 +51,7 @@ export class PoImportController {
 
   @Get('history')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(RoleName.ADMIN, RoleName.SUPER_ADMIN)
+  @Roles(AuthRole.ADMIN, AuthRole.SUPER_ADMIN)
   async getHistory(@Query('limit') limit = '50', @Query('status') status?: string): Promise<PoImportHistory[]> {
     const where = status ? { status } : {};
 
