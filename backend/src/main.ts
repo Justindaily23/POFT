@@ -10,9 +10,6 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const port = process.env.PORT || 3000;
 
-  // Enable CORS
-  const allowedOrigins = configService.get<string>('ALLOWED_ORIGINS')?.split(',') || [];
-
   app.enableCors({
     // origin: (origin, callback) => {
     //   if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
@@ -52,4 +49,4 @@ async function bootstrap() {
     await app.listen(port, '0.0.0.0'));
   console.log(`Application running on${await app.getUrl()}`);
 }
-bootstrap();
+bootstrap().catch((err) => console.error(err)); // Add .catch;

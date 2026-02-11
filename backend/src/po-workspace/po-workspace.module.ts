@@ -4,6 +4,6 @@ import { PoWorkspaceController } from './po-workspace.controller';
 
 @Module({
   providers: [PoWorkspaceService],
-  controllers: [PoWorkspaceController]
+  controllers: [PoWorkspaceController],
 })
 export class PoWorkspaceModule {}

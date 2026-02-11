@@ -1,26 +1,26 @@
-import { Transform, Type } from 'class-transformer';
-import { IsString, IsNotEmpty, IsOptional, IsNumber, Min, IsUUID } from 'class-validator';
+import { Transform, Type, TransformFnParams } from 'class-transformer'; // 1. Added TransformFnParams
+import { IsString, IsNotEmpty, IsOptional, IsNumber, Min } from 'class-validator';
 
-// Helper function to clean numeric strings with commas/symbols
-const cleanNumeric = ({ value }) => {
+// Replace your helpers with these:
+const cleanNumeric = ({ value }: TransformFnParams): number | null => {
   if (typeof value === 'string') {
     const sanitized = value.replace(/[^0-9.]/g, '');
     return sanitized ? Number(sanitized) : null;
   }
-  return value;
+  return value as number;
 };
 
-// Helper function to trim strings automatically
-const trimString = ({ value }) => (typeof value === 'string' ? value.trim() : value);
+const trimString = ({ value }: TransformFnParams): string | unknown =>
+  typeof value === 'string' ? value.trim() : value;
 
 export class CreateFundRequestDto {
-  @IsString() // 2026 Best Practice: Validate format if it's always a UUID
+  @IsString()
   @IsNotEmpty()
   duid: string;
 
   @IsString()
   @IsOptional()
-  @Transform(trimString) // Trims whitespace from resubmitted data
+  @Transform(trimString)
   poNumber?: string;
 
   @IsString()
@@ -66,13 +66,13 @@ export class CreateFundRequestDto {
   @IsNumber()
   @IsOptional()
   @Min(0)
-  @Transform(cleanNumeric) // Handles "25,600.00" -> 25600.00
+  @Transform(cleanNumeric)
   unitPrice?: number;
 
   @IsNumber()
   @IsOptional()
   @Min(0)
-  @Transform(cleanNumeric) // Handles formatted quantities too
+  @Transform(cleanNumeric)
   requestedQuantity?: number;
 
   @IsNumber()
@@ -91,10 +91,10 @@ export class CreateFundRequestDto {
   @Transform(trimString)
   pmId?: string;
 
-  @IsNumber() // FIXED: Changed from @IsString to @IsNumber because it's an amount
+  @IsNumber()
   @IsNotEmpty()
   @Min(0)
-  @Transform(cleanNumeric) // Ensures "1,000.50" becomes 1000.5
+  @Transform(cleanNumeric)
   requestedAmount: number;
 
   @Type(() => Date)

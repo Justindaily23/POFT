@@ -22,40 +22,39 @@ export class UserService {
     const saltRounds = process.env.NODE_ENV === 'production' ? 12 : 10;
     const hashedPassword = await bcrypt.hash(tempPassword, saltRounds);
 
-    let createdUser;
-    let staffProfile;
+    const { createdUser, staffProfile } = await (async () => {
+      try {
+        return await this.prisma.$transaction(
+          async (tx) => {
+            const user = await this.createUserInternal(dto.user, hashedPassword, tx);
+            const staffId = await this.generateStaffIdMultiInstanceSafe('STC', dto.staffRoleId, dto.stateId, tx);
 
-    try {
-      await this.prisma.$transaction(
-        async (tx) => {
-          // 1️⃣ Create user
-          createdUser = await this.createUserInternal(dto.user, hashedPassword, tx);
+            const profile = await tx.staffProfile.create({
+              data: {
+                userId: user.id,
+                roleId: dto.staffRoleId,
+                stateId: dto.stateId,
+                staffId,
+                isActive: true,
+              },
+            });
 
-          // 2️⃣ Generate safe staffId
-          const staffId = await this.generateStaffIdMultiInstanceSafe('STC', dto.staffRoleId, dto.stateId, tx);
+            logger.info(`StaffId ${staffId} generated for user ${user.email}`);
 
-          // 3️⃣ Create staff profile
-          staffProfile = await tx.staffProfile.create({
-            data: {
-              userId: createdUser.id,
-              roleId: dto.staffRoleId,
-              stateId: dto.stateId,
-              staffId,
-              isActive: true,
-            },
-          });
+            return { createdUser: user, staffProfile: profile };
+          },
+          { timeout: 15000 },
+        );
+      } catch (error: unknown) {
+        // FIX: Changed from 'any' to 'unknown'
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        logger.error('Failed to create staff account', { error: errorMessage, email: dto.user.email });
 
-          logger.info(`StaffId ${staffId} generated for user ${createdUser.email}`);
-        },
-        { timeout: 15000 },
-      );
-    } catch (error: any) {
-      logger.error('Failed to create staff account', { error, email: dto.user.email });
-      if (error instanceof ConflictException || error instanceof BadRequestException) throw error;
-      throw new InternalServerErrorException('Account creation failed');
-    }
+        if (error instanceof ConflictException || error instanceof BadRequestException) throw error;
+        throw new InternalServerErrorException('Account creation failed');
+      }
+    })();
 
-    // 4️⃣ Queue ACCOUNT_CREATED notification for retries
     try {
       await this.notificationsQueue.add(
         'send-notification',
@@ -65,14 +64,16 @@ export class UserService {
           payload: { tempPassword, email: createdUser.email },
         },
         {
-          attempts: 3, // Retry 3 times
-          backoff: 5000, // 5 seconds between attempts
+          attempts: 3,
+          backoff: 5000,
           removeOnComplete: true,
-          removeOnFail: false, // Keep failed jobs for manual retry/logging
+          removeOnFail: false,
         },
       );
-    } catch (queueErr) {
-      logger.warn(`Failed to enqueue ACCOUNT_CREATED notification for ${createdUser.email}`, queueErr);
+    } catch (queueErr: unknown) {
+      // FIX: Use unknown here too
+      const qMsg = queueErr instanceof Error ? queueErr.message : 'Queue error';
+      logger.warn(`Failed to enqueue ACCOUNT_CREATED notification for ${createdUser.email}`, { error: qMsg });
     }
 
     return {
@@ -81,7 +82,6 @@ export class UserService {
     };
   }
 
-  // --- Internal user creation ---
   private async createUserInternal(dto: CreateUserDto, hashedPassword: string, tx: Prisma.TransactionClient) {
     const exists = await tx.user.findUnique({ where: { email: dto.email } });
     if (exists) throw new ConflictException('Email already exists');
@@ -92,13 +92,12 @@ export class UserService {
     });
   }
 
-  // --- Safe staffId generation with optional role code ---
   private async generateStaffIdMultiInstanceSafe(
     companyCode: string,
     staffRoleId: string,
     stateId: string,
     tx: Prisma.TransactionClient,
-    roleCodeFromFrontend?: string, // optional
+    roleCodeFromFrontend?: string,
   ): Promise<string> {
     const role = await tx.staffRole.findUnique({ where: { id: staffRoleId } });
     const state = await tx.state.findUnique({ where: { id: stateId } });
@@ -107,16 +106,14 @@ export class UserService {
       throw new BadRequestException('Invalid role or state');
     }
 
-    // Use provided roleCode or auto-generate from role name
     const roleCode = roleCodeFromFrontend
       ? roleCodeFromFrontend.toUpperCase()
       : role.name
-          .split(/\s+/) // split by space
-          .map((word) => word[0]) // take first letter
+          .split(/\s+/)
+          .map((word) => word[0]) // Extract first letter
           .join('')
           .toUpperCase();
 
-    // Upsert sequence for safe multi-instance increment
     const seq = await tx.staffIdSequence.upsert({
       where: { company_roleCode_stateCode: { company: companyCode, roleCode, stateCode: state.code } },
       update: { lastValue: { increment: 1 } },

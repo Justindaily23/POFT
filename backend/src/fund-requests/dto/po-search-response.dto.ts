@@ -30,7 +30,7 @@ export interface POLineSearchResponseDto {
 export interface FundRequestHistory {
   id: string;
   fundRequestId: string;
-  purchaseOrderLineId;
+  purchaseOrderLineId: string;
   requestedBy: string;
   itemDescription: string;
   requestStatus: 'PENDING' | 'APPROVED' | 'REJECTED';

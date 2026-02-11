@@ -58,4 +58,4 @@ async function bootstrap() {
   }
 }
 
-bootstrap();
+bootstrap().catch((err) => console.error(err)); // Add this line

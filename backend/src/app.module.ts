@@ -12,7 +12,6 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { CleanupService } from './cleanup/cleanup.service';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { ConfigService } from '@nestjs/config';
-import { NotificationsService } from './notifications/notifications.service';
 import { ContractAmendmentsService } from './contract-amendments/contract-amendments.service';
 import { BullModule } from '@nestjs/bull';
 import { FundRequestsModule } from './fund-requests/fund-requests.module';

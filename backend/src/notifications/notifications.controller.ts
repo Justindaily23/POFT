@@ -1,47 +1,30 @@
-// src/notifications/notifications.controller.ts
-import { Controller, Get, Patch, Param, Request, UseGuards } from '@nestjs/common';
+import { Controller, Get, Patch, Param, Request as Req, UseGuards } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth-guard';
+import { RequestWithUser } from 'src/common/interfaces/request-with-user.interface';
 
 @Controller('notifications')
-@UseGuards(JwtAuthGuard) //  Only logged-in users can see their alerts
+@UseGuards(JwtAuthGuard)
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
-  /**
-   * GET /notifications
-   * Used by PMs and Admins to see their list of alerts.
-   */
   @Get()
-  findAll(@Request() req) {
-    // req.user.id comes from your JWT payload
-    return this.notificationsService.getUserNotifications(req.user.id);
+  findAll(@Req() req: RequestWithUser) {
+    return this.notificationsService.getUserNotifications(req.user.sub);
   }
 
-  /**
-   * GET /notifications/unread-count
-   * Used for the little red dot/badge on the Bell icon.
-   */
   @Get('unread-count')
-  getUnread(@Request() req) {
-    return this.notificationsService.getUnreadCount(req.user.id);
+  getUnread(@Req() req: RequestWithUser) {
+    return this.notificationsService.getUnreadCount(req.user.sub);
   }
 
-  /**
-   * PATCH /notifications/:id/read
-   * Triggered when a user clicks an individual notification.
-   */
+  @Patch('read-all')
+  markAllAsRead(@Req() req: RequestWithUser) {
+    return this.notificationsService.markAllAsRead(req.user.sub);
+  }
+
   @Patch(':id/read')
   markAsRead(@Param('id') id: string) {
     return this.notificationsService.markAsRead(id);
-  }
-
-  /**
-   * PATCH /notifications/read-all
-   * The "Clear All" enterprise feature.
-   */
-  @Patch('read-all')
-  markAllAsRead(@Request() req) {
-    return this.notificationsService.markAllAsRead(req.user.id);
   }
 }

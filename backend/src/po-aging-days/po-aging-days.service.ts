@@ -15,8 +15,6 @@ export class PoAgingDaysService {
     take = 50,
     cursor?: string,
   ): Promise<{ data: PoAgingDaysResponse[]; nextCursor: string | null }> {
-    const today = new Date();
-
     const lines = await this.prisma.purchaseOrderLine.findMany({
       take,
       ...(cursor && {

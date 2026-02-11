@@ -323,7 +323,7 @@ export class FundRequestsService {
           };
 
     //Save Notification in the database
-    const notification = await this.notificationsService.notify(
+    await this.notificationsService.notify(
       fundRequest.requestedBy,
       fundRequest.status === FundRequestStatus.APPROVED
         ? NotificationType.FUND_REQUEST_APPROVED

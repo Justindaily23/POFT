@@ -21,7 +21,6 @@ async function bootstrap() {
   });
 
   const prisma = app.get(PrismaService);
-  const configService = app.get(ConfigService);
 
   try {
     console.log('🌱 Seeding PO Types...');
@@ -86,4 +85,4 @@ async function bootstrap() {
   }
 }
 
-bootstrap();
+bootstrap().catch((err) => console.error(err)); // Add this line

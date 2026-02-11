@@ -19,3 +19,5 @@ jobs:
         working-directory: backend
       - run: npm run build
         working-directory: backend
+      - run: echo "Skipping lint for now"
+        working-directory: backend

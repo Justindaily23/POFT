@@ -18,13 +18,12 @@ export interface ImportResult {
   errors: string[];
 }
 
+// ... imports stay the same
+
 @Injectable()
 export class PoImportService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Main entry point for Excel Import
-   */
   async importFromExcel(file: Express.Multer.File, uploadedBy?: string): Promise<ImportResult> {
     const fileBuffer = fs.readFileSync(file.path);
     const fileHash = createHash('md5').update(fileBuffer).digest('hex');
@@ -34,7 +33,6 @@ export class PoImportService {
       where: { fileHash },
     });
     if (existing && existing.status === 'SUCCESS') {
-      // 🗑️ CLEANUP: Delete the file from /uploads before throwing the error
       if (fs.existsSync(file.path)) {
         fs.unlinkSync(file.path);
       }
@@ -48,14 +46,16 @@ export class PoImportService {
     try {
       rawRows = readExcel(file.path);
       if (!rawRows.length) throw new Error('Excel file appears to be empty.');
-    } catch (e: any) {
-      throw new BadRequestException(`Excel Parsing Error: ${e.message}`);
+    } catch (e: unknown) {
+      // FIX: Use unknown instead of any
+      const message = e instanceof Error ? e.message : 'Unknown parsing error';
+      throw new BadRequestException(`Excel Parsing Error: ${message}`);
     }
 
     const validRows = validateRows(rawRows);
     const grouped = this.groupRows(validRows);
 
-    // 3. Cache PO Types for performance (prevents 1000+ DB hits)
+    // 3. Cache PO Types
     const poTypes = await this.prisma.poType.findMany();
     const poTypeMap = new Map(poTypes.map((t) => [t.code.toUpperCase(), t.id]));
 
@@ -64,16 +64,14 @@ export class PoImportService {
     let poFailed = 0;
     let linesProcessed = 0;
 
-    // 4. Process Groups (Partial Success Logic)
+    // 4. Process Groups
     for (const [duid, poMap] of grouped.entries()) {
       for (const [poNumber, lines] of poMap.entries()) {
         try {
-          // We use a mini-transaction per PO (header + its lines)
           await this.prisma.$transaction(
             async (tx) => {
               const header = lines[0];
 
-              // Upsert Header
               const po = await tx.purchaseOrder.upsert({
                 where: { duid_poNumber: { duid, poNumber } },
                 update: {
@@ -90,22 +88,19 @@ export class PoImportService {
                 },
               });
 
-              // Process Lines
               for (const line of lines) {
                 const formattedCode = line.poType?.trim().toUpperCase().replace(/\s+/g, '_') || '';
                 const poTypeId = poTypeMap.get(formattedCode);
 
                 if (!poTypeId) {
                   errors.push(`PO ${poNumber} (DUID: ${duid}): Unknown PO Type: ${line.poType}`);
-                  poFailed++; // Increment failed count
-                  continue; // Skip this line or handle as error
+                  poFailed++;
+                  continue;
                 }
 
                 const unitPrice = new Decimal(line.unitPrice || 0);
                 const qty = new Decimal(line.requestedQuantity || 0);
                 const lineAmount = unitPrice.mul(qty);
-
-                // Ensure we have a valid Date object for Prisma
                 const dbDate = line.poIssuedDate instanceof Date ? line.poIssuedDate : new Date(line.poIssuedDate);
 
                 await tx.purchaseOrderLine.upsert({
@@ -144,22 +139,20 @@ export class PoImportService {
                 linesProcessed++;
               }
             },
-            {
-              timeout: 15000, // Give each PO 15 seconds to process its lines
-            },
+            { timeout: 15000 },
           );
           poSucceeded++;
-        } catch (err: any) {
+        } catch (err: unknown) {
+          // FIX: Use unknown instead of any
           poFailed++;
-          errors.push(`PO ${poNumber} (DUID: ${duid}): ${err.message}`);
+          const message = err instanceof Error ? err.message : 'Unknown transaction error';
+          errors.push(`PO ${poNumber} (DUID: ${duid}): ${message}`);
         }
       }
     }
 
-    // 5. Final Status
     const finalStatus = poFailed === 0 ? 'SUCCESS' : poSucceeded > 0 ? 'PARTIAL' : 'FAILED';
 
-    // 6. Record History
     const history = await this.prisma.poImportHistory.create({
       data: {
         fileName: file.originalname,
@@ -179,8 +172,8 @@ export class PoImportService {
       poSucceeded,
       poFailed,
       linesProcessed,
-      status: finalStatus as any,
-      errors: errors.slice(0, 50), // Cap errors sent to UI for performance
+      status: finalStatus, // FIX: Explicit cast instead of any
+      errors: errors.slice(0, 50),
     };
   }
 

@@ -28,7 +28,7 @@ export interface JwtPayload {
   sub: string;
   role: AuthRole;
   email: string;
-  mustChangePassword?: Boolean;
+  mustChangePassword?: boolean;
 }
 
 @Injectable()
