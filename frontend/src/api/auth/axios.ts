@@ -34,7 +34,8 @@ const processQueue = (error: AxiosError | Error | null, token: string | null = n
 };
 
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL,
+  // This combines the root URL (e.g., https://poft.onrender.com) with your prefix
+  baseURL: `${import.meta.env.VITE_API_BASE_URL}/api`,
   withCredentials: true,
   paramsSerializer: { indexes: null },
 });
