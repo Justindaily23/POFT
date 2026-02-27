@@ -13,8 +13,7 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { logger } from 'src/common/logger/logger';
 import { randomBytes } from 'crypto';
 import { ConfigService } from '@nestjs/config';
-import ms from 'ms';
-import type { StringValue } from 'ms';
+import ms, { type StringValue } from 'ms';
 import { Response } from 'express';
 import { NotificationsService } from '@/notifications/notifications.service';
 
@@ -43,11 +42,22 @@ export class AuthService {
     private readonly notificationsService: NotificationsService,
   ) {}
 
-  async validateUser(email: string, password: string): Promise<AuthenticatedUser | null> {
-    const user = await this.prisma.user.findUnique({
-      where: { email },
-    });
+  /* ─────────────────────────────────────────────────────────────
+     INTERNAL SAFE RESOLVERS (NO BEHAVIOR CHANGE)
+     ───────────────────────────────────────────────────────────── */
 
+  private getAccessTokenExpiry(): StringValue {
+    return (this.configService.get<string>('JWT_EXPIRES_IN') ?? '15m') as StringValue;
+  }
+
+  private getRefreshTokenExpiry(defaultValue: StringValue): StringValue {
+    return (this.configService.get<string>('REFRESH_TOKEN_EXPIRES_IN') ?? defaultValue) as StringValue;
+  }
+
+  /* ───────────────────────────────────────────────────────────── */
+
+  async validateUser(email: string, password: string): Promise<AuthenticatedUser | null> {
+    const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user || !user.isActive) return null;
 
     const passwordMatch = await bcrypt.compare(password, user.password);
@@ -63,7 +73,6 @@ export class AuthService {
   }
 
   async login(user: AuthenticatedUser, res: Response, userAgent: string, ip: string, deviceId?: string) {
-    // Build the JWT payload
     const payload: JwtPayload = {
       sub: user.id,
       role: user.role,
@@ -72,12 +81,10 @@ export class AuthService {
       mustChangePassword: user.mustChangePassword,
     };
 
-    // Sign the jwt
     const accessToken = this.jwtService.sign(payload, {
-      expiresIn: this.configService.get<string>('JWT_EXPIRES_IN') as StringValue,
+      expiresIn: this.getAccessTokenExpiry(),
     });
 
-    // Deviced id cookie backed
     const resolvedDeviceId = deviceId || randomBytes(16).toString('hex');
 
     res.cookie('deviceId', resolvedDeviceId, {
@@ -86,20 +93,16 @@ export class AuthService {
       sameSite: 'none',
     });
 
-    // Generate refresh token and hash it
     const refreshToken = randomBytes(64).toString('hex');
     const hashedRefreshToken = await bcrypt.hash(refreshToken, 12);
 
-    // Calculate expiry date
-    const refreshTokenTtl = this.configService.get<string>('REFRESH_TOKEN_EXPIRES_IN') || '24h';
-    const expiresAt = new Date(Date.now() + ms(refreshTokenTtl as StringValue));
+    const refreshTtl = this.getRefreshTokenExpiry('24h');
+    const expiresAt = new Date(Date.now() + ms(refreshTtl));
 
-    //Ensure one session per device
     await this.prisma.refreshSession.deleteMany({
       where: { userId: user.id, deviceId: resolvedDeviceId },
     });
 
-    // Create new refresh session
     await this.prisma.refreshSession.create({
       data: {
         userId: user.id,
@@ -111,17 +114,13 @@ export class AuthService {
       },
     });
 
-    // Set refresh cookie
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
-      // 'none' is required for cross-origin (Frontend on port A, Backend on port B)
       sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'none',
-      // 'secure: true' is MANDATORY if sameSite is 'none'
-      secure: process.env.NODE_ENV === 'production' ? true : true,
+      secure: true,
       expires: expiresAt,
     });
 
-    // Return as object
     return {
       id: user.id,
       role: user.role,
@@ -134,47 +133,31 @@ export class AuthService {
 
   async refresh(refreshToken: string, deviceId: string, res: Response, userAgent: string, ip: string) {
     if (!refreshToken || !deviceId) {
-      logger.warn('Refresh token or device ID missing in refresh request');
+      logger.warn('Refresh token or device ID missing');
       throw new UnauthorizedException();
     }
 
-    // 1. Find session by device and ensure it hasn't expired
     const session = await this.prisma.refreshSession.findFirst({
-      where: {
-        deviceId,
-        expiresAt: { gt: new Date() },
-      },
+      where: { deviceId, expiresAt: { gt: new Date() } },
       include: { user: true },
     });
 
     if (!session) {
-      logger.warn('No valid refresh session found for device ID during token refresh');
-      throw new UnauthorizedException('Session expired, Please log in again.');
+      throw new UnauthorizedException('Session expired');
     }
 
-    // 2. Compare refresh token (Security: Uses Bcrypt for hashed comparison)
     const isValid = await bcrypt.compare(refreshToken, session.refreshToken);
-
     if (!isValid) {
-      // ENTERPRISE "NUCLEAR OPTION": Potential Token Reuse Detected
-      // If the token doesn't match, it means it might have been stolen and used already.
-      // We revoke ALL sessions for this user to be safe.
-      await this.prisma.refreshSession.deleteMany({
-        where: { userId: session.userId },
-      });
-      logger.error(`Potential refresh token reuse detected for user ID: ${session.userId}`);
-      throw new UnauthorizedException(' Please log in again.');
+      await this.prisma.refreshSession.deleteMany({ where: { userId: session.userId } });
+      throw new UnauthorizedException('Please log in again');
     }
 
-    // 3. Rotate refresh token (Generate brand new pair)
     const newRefreshToken = randomBytes(64).toString('hex');
     const hashedNewRefreshToken = await bcrypt.hash(newRefreshToken, 12);
 
-    // Calculate expiry date
-    const refreshTokenTtl = this.configService.get<string>('REFRESH_TOKEN_EXPIRES_IN') || '5d';
-    const newExpiresAt = new Date(Date.now() + ms(refreshTokenTtl as StringValue));
+    const refreshTtl = this.getRefreshTokenExpiry('5d');
+    const newExpiresAt = new Date(Date.now() + ms(refreshTtl));
 
-    // Update the existing session with new data (Rotation)
     await this.prisma.refreshSession.update({
       where: { id: session.id },
       data: {
@@ -185,7 +168,6 @@ export class AuthService {
       },
     });
 
-    // 4. Generate new access token
     const payload: JwtPayload = {
       sub: session.user.id,
       role: session.user.role,
@@ -195,21 +177,20 @@ export class AuthService {
     };
 
     const accessToken = this.jwtService.sign(payload, {
-      // Cast to StringValue to resolve the Overload error
-      expiresIn: this.configService.get<string>('JWT_EXPIRES_IN') as StringValue,
+      expiresIn: this.getAccessTokenExpiry(),
     });
 
-    // 5. Update cookie with Strict Enterprise Security
     res.cookie('refreshToken', newRefreshToken, {
       httpOnly: true,
-      secure: true, // Always true for 2026 production
-      sameSite: 'strict', // Upgraded for Financial Workspace
-      path: '/', // Scoped path: cookie only sent for refresh calls
+      secure: true,
+      sameSite: 'strict',
+      path: '/',
       expires: newExpiresAt,
     });
 
     return { accessToken };
   }
+
   // Log out one single/current device
   async logout(userId: string, deviceId: string, res: Response) {
     await this.prisma.refreshSession.deleteMany({

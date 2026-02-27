@@ -29,9 +29,9 @@ jobs:
         working-directory: backend
 
     env:
-      # ✅ Match these to the service container above
       DATABASE_URL: postgresql://testuser:testpassword@localhost:5432/testdb?schema=public
       JWT_SECRET: test_secret_key_123
+      NODE_ENV: test
 
     steps:
       - uses: actions/checkout@v4
@@ -54,8 +54,7 @@ jobs:
         run: npx prisma migrate deploy
 
       - name: Run E2E Tests
-        # ✅ Your specific test command
-        run: NODE_ENV=test npm run test:e2e
+        run: npm run test:e2e
 
       - name: Build
         run: npm run build
