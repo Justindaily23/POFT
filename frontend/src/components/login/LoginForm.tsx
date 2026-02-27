@@ -1,20 +1,18 @@
 import { useState } from "react";
-import { useAuth } from "@/hooks/useAuth"; // Use the hook we linked to your Store
+import { useAuth } from "@/hooks/auth/useAuth";
 import { FormInput } from "./FormInput";
 import { Logo } from "../utility/Logo";
+import type { AppAxiosError } from "@/types/api/api.types";
 
 export function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
 
-  // Destructure from useAuth hook (which returns the useMutation object)
   const { mutate, isPending, isError, error } = useAuth();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // This triggers the logic in useAuth.ts:
-    // 1. API Call -> 2. Update Store -> 3. Navigate to "/"
     mutate({ email, password, remember });
   };
 
@@ -41,11 +39,11 @@ export function LoginForm() {
             type="checkbox"
             checked={remember}
             onChange={(e) => setRemember(e.target.checked)}
-            className="mr-2"
+            className="mr-2 cursor-pointer"
           />
           Remember account
         </label>
-        <a href="/reset-password" className="text-blue-500 hover:underline p-4">
+        <a href="/forgot-password" className="text-blue-500 hover:underline p-4">
           Reset Password
         </a>
       </div>
@@ -53,19 +51,18 @@ export function LoginForm() {
       <button
         type="submit"
         disabled={isPending}
-        className="w-full rounded-md bg-blue-600 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
+        className="w-full rounded-md bg-blue-600 py-2 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
       >
         {isPending ? "Logging in..." : "Login"}
       </button>
 
-      {/* Use the server error message if it exists */}
+      {/* ✅ FIXED: Type-safe error message extraction */}
       {isError && (
-        <p className="text-sm text-red-600 text-center">
-          {(error as any)?.response?.data?.message || "Login failed"}
+        <p className="text-sm text-red-600 text-center animate-in fade-in duration-200">
+          {(error as AppAxiosError)?.response?.data?.message}
         </p>
       )}
 
-      {/* Tiny logo beneath form */}
       <div className="flex justify-center mt-6">
         <Logo size="sm" className="opacity-100" />
       </div>

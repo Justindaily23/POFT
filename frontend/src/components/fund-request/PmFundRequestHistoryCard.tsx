@@ -1,5 +1,5 @@
-import type { FundRequestResponse } from "@/features/fundRequests/fundRequest.type";
-import { formatNaira } from "@/features/fundRequests/schema";
+import type { FundRequestResponse } from "@/types/fund-request/fundRequest.type";
+import { formatNaira } from "@/utils/fund-request/schema";
 import { Clock, CheckCircle2, XCircle } from "lucide-react";
 
 export default function PmHistoryCard({ request }: { request: FundRequestResponse }) {

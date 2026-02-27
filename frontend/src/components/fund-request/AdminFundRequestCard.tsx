@@ -1,161 +1,301 @@
-// features/fundRequests/adminFundRequestCard.tsx
+import React from "react";
+import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { fundRequestApi } from "@/features/fundRequests/fundRequest.api";
-import type { FundRequestResponse } from "@/features/fundRequests/fundRequest.type";
-import { formatNaira } from "@/features/fundRequests/schema";
-import { useToast } from "@/hooks/use-toast";
-import { Check, X, User, FileText, Wallet, Clock, ShieldCheck } from "lucide-react";
+import { fundRequestApi } from "@/api/fund-request/fundRequest.api";
+import type { FundRequestResponseDto } from "@/types/fund-request/fundRequest.type";
+import type { AppAxiosError } from "@/types/api/api.types";
+import { formatNaira } from "@/utils/fund-request/schema";
+import { toast } from "sonner";
+import { User, Wallet, Clock, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
 interface AdminCardProps {
-  request: FundRequestResponse;
+  request: FundRequestResponseDto;
   isHistory?: boolean;
 }
 
+export const FundRequestAction = {
+  APPROVE: "APPROVE",
+  REJECT: "REJECT",
+} as const;
+
+export type FundRequestAction = (typeof FundRequestAction)[keyof typeof FundRequestAction];
+
 export default function AdminFundRequestCard({ request, isHistory = false }: AdminCardProps) {
   const queryClient = useQueryClient();
-  const { toast } = useToast();
 
-  const approveMutation = useMutation({
-    mutationFn: () => fundRequestApi.approve(request.id),
+  // Modal states
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [contractAmount, setContractAmount] = useState<number | undefined>();
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState<string>("");
+
+  // ─── Mutations ────────────────────────────────
+
+  // 1️⃣ Initial approve attempt
+  const approveAttemptMutation = useMutation({
+    mutationFn: () => fundRequestApi.approveOrReject(request.id, FundRequestAction.APPROVE),
     onSuccess: () => {
+      toast.success("Request approved successfully!");
       queryClient.invalidateQueries({ queryKey: ["adminFundRequests"] });
-      toast({ title: "Approved", description: "Request has been successfully processed." });
     },
-    onError: (error: any) => {
-      // 1. Extract message from NestJS response
-      const rawMessage = error.response?.data?.message || "An unexpected error occurred";
-
-      // 2. Format message (handles strings or arrays from NestJS)
-      const displayMessage = Array.isArray(rawMessage) ? rawMessage.join(", ") : rawMessage;
-
-      toast({
-        variant: "destructive", // This makes it the Red Box
-        title: "Registration Failed",
-        description: displayMessage,
-      });
+    onError: (error: AppAxiosError) => {
+      const data = error.response?.data;
+      if (data?.requiresContract) {
+        setShowApproveModal(true);
+      } else {
+        toast.error(data?.message || "Failed to approve request.");
+      }
     },
   });
 
+  // 2️⃣ Manual approve with contract amount
+  const approveWithContractMutation = useMutation({
+    mutationFn: (amount: number) =>
+      fundRequestApi.approveOrReject(request.id, FundRequestAction.APPROVE, amount),
+    onSuccess: () => {
+      toast.success("Request approved successfully!");
+      queryClient.invalidateQueries({ queryKey: ["adminFundRequests"] });
+      queryClient.invalidateQueries({ queryKey: ["fund-request-history", request.poLineId] });
+      setShowApproveModal(false);
+      setContractAmount(undefined);
+    },
+    onError: (error: AppAxiosError) => {
+      toast.error(error.response?.data?.message || "Failed to approve request.");
+    },
+  });
+
+  // 3️⃣ Reject Mutation
   const rejectMutation = useMutation({
-    mutationFn: (reason: string) => fundRequestApi.reject(request.id, reason),
+    mutationFn: (reason: string) =>
+      fundRequestApi.approveOrReject(request.id, FundRequestAction.REJECT, undefined, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["adminFundRequests"] });
-      toast({ title: "Rejected", description: "The PM has been notified." });
+      toast.success("Request rejected. PM has been notified.");
+      setShowRejectModal(false);
+      setRejectionReason("");
     },
-    onError: (error: any) => {
-      // 1. Extract message from NestJS response
-      const rawMessage = error.response?.data?.message || "An unexpected error occurred";
-
-      // 2. Format message (handles strings or arrays from NestJS)
-      const displayMessage = Array.isArray(rawMessage) ? rawMessage.join(", ") : rawMessage;
-
-      toast({
-        variant: "destructive", // This makes it the Red Box
-        title: "Registration Failed",
-        description: displayMessage,
-      });
+    onError: (error: AppAxiosError) => {
+      const data = error?.response?.data;
+      const rawMessage = Array.isArray(data?.message)
+        ? data.message.join(", ")
+        : data?.message || "An unexpected error occurred";
+      toast.error(rawMessage);
     },
   });
-
-  const handleReject = () => {
-    const reason = prompt("Enter rejection reason:");
-    if (reason) rejectMutation.mutate(reason);
-  };
-
-  const isProcessing = approveMutation.isPending || rejectMutation.isPending;
 
   return (
     <div
-      className={`bg-white border rounded-2xl p-6 transition-all ${isHistory ? "opacity-85 grayscale-[0.3]" : "shadow-sm hover:shadow-md"}`}
+      className={`bg-white border border-slate-200 rounded-xl p-4 transition-all flex flex-col justify-between h-full ${
+        isHistory ? "bg-slate-50 opacity-80" : "shadow-sm hover:shadow-md hover:border-blue-200"
+      }`}
     >
-      <div className="flex justify-between items-start mb-6">
-        <div>
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-            Amount Requested
-          </span>
-          <h2 className={`text-2xl font-black ${isHistory ? "text-slate-600" : "text-blue-700"}`}>
-            {formatNaira(request.requestedAmount)}
-          </h2>
-        </div>
-        {!isHistory ? (
-          <div className="bg-blue-50 text-blue-700 text-[10px] font-black px-2 py-1 rounded border border-blue-100 uppercase">
-            Pending
+      {/* Header & Details */}
+      <div className="min-w-0">
+        <div className="flex justify-between items-start mb-3 gap-2">
+          <div className="space-y-0.5 min-w-0">
+            <span className="text-[9px] font-bold text-slate-900 uppercase tracking-tight">
+              Amount
+            </span>
+            <h2 className="text-lg font-bold tracking-tight truncate text-slate-900">
+              {formatNaira(request.requestedAmount)}
+            </h2>
           </div>
-        ) : (
+
           <div
-            className={`text-[10px] font-black px-2 py-1 rounded border uppercase ${
-              request.status === "APPROVED"
-                ? "bg-green-50 text-green-700 border-green-100"
-                : "bg-red-50 text-red-700 border-red-100"
+            className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase shrink-0 ${
+              !isHistory
+                ? "bg-blue-50 text-blue-700 border-blue-100"
+                : request.status === "APPROVED"
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                  : "bg-red-50 text-red-700 border-red-100"
             }`}
           >
-            {request.status}
+            {isHistory ? request.status : "Pending"}
           </div>
-        )}
-      </div>
-
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="space-y-1">
-          <label className="text-[9px] font-bold text-slate-400 uppercase flex items-center gap-1">
-            <User className="h-3 w-3" /> PM Name
-          </label>
-          <p className="text-sm font-semibold">{request.pm || "N/A"}</p>
         </div>
-        <div className="space-y-1 text-right">
-          <label className="text-[9px] font-bold text-slate-400 uppercase flex items-center gap-1 justify-end">
-            <Wallet className="h-3 w-3" /> DUID Line
-          </label>
-          <p className="text-sm font-mono text-slate-600">
-            {request.duid} / {request.poLineNumber || "0"}
+
+        <div className="space-y-2 mb-3 py-2 border-y border-slate-50">
+          <DetailRow
+            icon={<User />}
+            label="PM"
+            value={request.pm || "N/A"}
+            labelClass="text-slate-900 font-bold"
+          />
+          <DetailRow
+            icon={<Wallet />}
+            label="DUID / Line"
+            value={`${request.duid} / ${request.poLineNumber || "N/A"}`}
+            valueClass="font-mono text-slate-900"
+            labelClass="text-slate-900 font-bold"
+          />
+          <DetailRow
+            icon={<Wallet />}
+            label="Contract"
+            value={formatNaira(request.contractAmount)}
+            valueClass="text-blue-950 font-mono"
+            labelClass="text-slate-900 font-bold"
+          />
+          <DetailRow
+            icon={<Wallet />}
+            label="Requested"
+            value={formatNaira(request.totalRequestedAmount)}
+            valueClass="text-orange-600 font-mono"
+            labelClass="text-slate-900 font-bold"
+          />
+          <DetailRow
+            icon={<Wallet />}
+            label="Approved"
+            value={formatNaira(request.totalApprovedAmount)}
+            valueClass="text-emerald-800 font-mono"
+            labelClass="text-slate-900 font-bold"
+          />
+          <DetailRow
+            icon={<Wallet />}
+            label="Balance"
+            value={formatNaira(request.remainingBalance)}
+            valueClass="text-red-900 font-mono"
+            labelClass="text-slate-900 font-bold"
+          />
+        </div>
+
+        <div className="mb-4 h-8">
+          <p className="text-[10px] text-slate-500 italic line-clamp-2 leading-tight">
+            "{request.requestPurpose}"
           </p>
         </div>
       </div>
 
-      <div className="bg-slate-50 p-4 rounded-xl mb-6">
-        <label className="text-[9px] font-bold text-slate-400 uppercase flex items-center gap-1 mb-1">
-          <FileText className="h-3 w-3" /> Purpose
-        </label>
-        <p className="text-xs text-slate-600 italic leading-relaxed">"{request.requestPurpose}"</p>
-      </div>
-
-      {/* FOOTER ACTIONS */}
       {!isHistory ? (
-        <div className="flex gap-3 pt-2">
+        <div className="flex gap-2 pt-2 border-t border-slate-50">
           <Button
-            disabled={isProcessing}
-            onClick={() => approveMutation.mutate()}
-            className="flex-1 bg-green-600 hover:bg-green-700 h-10 rounded-xl font-bold"
+            size="sm"
+            onClick={() => approveAttemptMutation.mutate()}
+            disabled={approveAttemptMutation.isPending || approveWithContractMutation.isPending}
+            className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white h-7 text-[10px] font-bold"
           >
-            {approveMutation.isPending ? (
-              "..."
-            ) : (
-              <>
-                <Check className="mr-1 h-4 w-4" /> Approve
-              </>
-            )}
+            {approveAttemptMutation.isPending ? "..." : "Approve"}
           </Button>
+
           <Button
-            variant="outline"
-            disabled={isProcessing}
-            onClick={handleReject}
-            className="flex-1 h-10 rounded-xl font-bold hover:bg-red-50 hover:text-red-600"
+            size="sm"
+            onClick={() => setShowRejectModal(true)}
+            disabled={approveAttemptMutation.isPending || approveWithContractMutation.isPending}
+            className="flex-1 bg-red-600 hover:bg-red-700 text-white h-7 text-[10px] font-bold"
           >
-            <X className="mr-1 h-4 w-4" /> Reject
+            Reject
           </Button>
         </div>
       ) : (
-        <div className="flex justify-between items-center pt-3 border-t text-[10px] font-bold text-slate-400">
+        <div className="flex justify-between items-center pt-2 border-t border-slate-50 text-[9px] font-bold text-slate-400 uppercase">
           <div className="flex items-center gap-1">
-            <ShieldCheck className="h-3 w-3 text-slate-300" />
-            AUDITED BY SYSTEM
+            <ShieldCheck className="h-3 w-3 opacity-40" /> Audited
           </div>
-          <div className="flex items-center gap-1 uppercase">
-            <Clock className="h-3 w-3" />
-            PROCESSED: {new Date().toLocaleDateString()}
+          <div className="flex items-center gap-1">
+            <Clock className="h-3 w-3 opacity-40" />
+            {request.createdAt ? new Date(request.createdAt).toLocaleDateString() : "N/A"}
           </div>
         </div>
       )}
+
+      {/* Modals */}
+      <Dialog open={showApproveModal} onOpenChange={setShowApproveModal}>
+        <DialogContent aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle>Initial Contract Setup</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-slate-500 mb-2">
+            No contract amount found for this line. Please set the total contract value to proceed.
+          </p>
+          <Input
+            type="number"
+            placeholder="Enter Amount in Naira"
+            value={contractAmount ?? ""}
+            onChange={(e) => setContractAmount(Number(e.target.value))}
+          />
+          <DialogFooter>
+            <Button
+              className="w-full"
+              disabled={approveWithContractMutation.isPending}
+              onClick={() => {
+                if (contractAmount && contractAmount > 0) {
+                  approveWithContractMutation.mutate(contractAmount);
+                } else {
+                  toast.error("Enter a valid contract amount");
+                }
+              }}
+            >
+              {approveWithContractMutation.isPending ? "Setting Up..." : "Set Amount & Approve"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showRejectModal} onOpenChange={setShowRejectModal}>
+        <DialogContent aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle>Rejection Reason</DialogTitle>
+          </DialogHeader>
+          <Input
+            type="text"
+            placeholder="Explain why this request is being rejected"
+            value={rejectionReason}
+            onChange={(e) => setRejectionReason(e.target.value)}
+            className="mb-2"
+          />
+          <DialogFooter>
+            <Button
+              className="w-full"
+              variant="destructive"
+              disabled={rejectMutation.isPending}
+              onClick={() => {
+                if (!rejectionReason.trim()) return toast.error("Reason is required");
+                rejectMutation.mutate(rejectionReason);
+              }}
+            >
+              {rejectMutation.isPending ? "Rejecting..." : "Confirm Rejection"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// Internal Helper for clean layout
+function DetailRow({
+  icon,
+  label,
+  value,
+  valueClass = "text-slate-700",
+  labelClass = "text-slate-900 font-bold", // Defaulting to darker/bolder here
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string | number | null; // Added number/null to prevent TS errors
+  valueClass?: string;
+  labelClass?: string; // 👈 Added this prop
+}) {
+  return (
+    <div className="flex justify-between items-center text-[11px] py-0.5">
+      <span className={`flex items-center gap-1.5 shrink-0 ${labelClass}`}>
+        {React.isValidElement(icon)
+          ? React.cloneElement(icon as React.ReactElement, { className: "h-3.5 w-3.5 opacity-90" })
+          : icon}
+        {label}
+      </span>
+      {/* Fallback to "0" or "N/A" here to stop NaN from showing up */}
+      <span className={`font-semibold truncate ml-4 ${valueClass}`}>
+        {value === "NaN" || value === null || value === undefined ? "0" : value}
+      </span>
     </div>
   );
 }
