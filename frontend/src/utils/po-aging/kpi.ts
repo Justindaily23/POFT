@@ -1,4 +1,4 @@
-import type { PoAgingDaysResponse } from "@/components/po-analytics/PoAgingDaysDesktop";
+import type { PoAgingLineDto } from "@/types/po-analytics/po-analytics.types";
 
 export interface KPIMetrics {
   totalPOs: number;
@@ -11,7 +11,7 @@ export interface KPIMetrics {
 /**
  * Calculate KPIs from a list of POs.
  */
-export const calculatePoKPI = (poData: PoAgingDaysResponse[]): KPIMetrics => {
+export const calculatePoKPI = (poData: PoAgingLineDto[]): KPIMetrics => {
   if (poData.length === 0) {
     return {
       totalPOs: 0,
@@ -22,6 +22,7 @@ export const calculatePoKPI = (poData: PoAgingDaysResponse[]): KPIMetrics => {
     };
   }
 
+  // ✅ FIX: Access properties defined in PoAgingLineDto
   const invoiced = poData.filter((po) => po.poInvoiceStatus === "INVOICED").length;
   const notInvoiced = poData.filter((po) => po.poInvoiceStatus === "NOT_INVOICED").length;
   const avgDays = poData.reduce((sum, po) => sum + po.numberOfDaysOpen, 0) / poData.length;

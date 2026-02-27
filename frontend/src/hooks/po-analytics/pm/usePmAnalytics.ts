@@ -1,7 +1,10 @@
 import { useState, useMemo, useRef, useCallback } from "react";
 import { usePmAnalyticsHooks } from "../usePmAnalyticsQuery";
 import { usePoAgingLogic } from "../usePoAgingLogic";
-import type { PoAgingFilterState } from "@/types/po-analytics/po-analytics.types";
+import type {
+  PoAgingDaysPaginatedResponse,
+  PoAgingFilterState,
+} from "@/types/po-analytics/po-analytics.types";
 
 export const usePmAnalytics = (userId: string) => {
   // --- UI & Filter State ---
@@ -89,7 +92,7 @@ export const usePmAnalytics = (userId: string) => {
 
   // --- Data Processing ---
   const flatLines = useMemo(
-    () => listQuery.data?.pages.flatMap((p) => p.data) ?? [],
+    () => listQuery.data?.pages.flatMap((p: PoAgingDaysPaginatedResponse) => p.data) ?? [],
     [listQuery.data],
   );
   const { metrics, groupedByDUID } = usePoAgingLogic(flatLines);

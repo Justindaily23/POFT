@@ -1,9 +1,12 @@
+// src/components/ui/button.tsx
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { type VariantProps } from "class-variance-authority";
-
 import { cn } from "@/lib/utils";
-import { buttonVariants } from "./button-variants"; // ✅ Import from external file
+import { buttonVariants } from "./button-variants"; // Keep your clean import
+
+// ✅ RE-EXPORT it here so other components can find it!
+export { buttonVariants };
 
 function Button({
   className,
@@ -26,5 +29,4 @@ function Button({
   );
 }
 
-// ✅ FIXED: Only export the component to satisfy Fast Refresh
 export { Button };

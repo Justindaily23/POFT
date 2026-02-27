@@ -1,4 +1,4 @@
-import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
+import { useQuery, useInfiniteQuery, type InfiniteData } from "@tanstack/react-query";
 import { fetchPmDashboard, fetchPmAgingList } from "@/api/po-analytics/poAnalytics.api";
 import type {
   PoAgingDaysPaginatedResponse,
@@ -19,7 +19,13 @@ export const usePmAnalyticsHooks = (filters: PoAgingFilterState) => {
   });
 
   // 2. AGING LIST QUERY
-  const listQuery = useInfiniteQuery<PoAgingDaysPaginatedResponse>({
+  const listQuery = useInfiniteQuery<
+    PoAgingDaysPaginatedResponse,
+    Error,
+    InfiniteData<PoAgingDaysPaginatedResponse>, // ✅ Tells TS the data has a .pages property
+    [string, PoAgingFilterState],
+    string | undefined
+  >({
     queryKey: ["pm-aging-list", filters],
     queryFn: ({ pageParam }) => fetchPmAgingList({ ...filters, cursor: pageParam }),
     enabled: isReady, // Prevents "undefined" API calls

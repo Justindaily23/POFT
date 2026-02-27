@@ -20,5 +20,4 @@ function Toggle({
   );
 }
 
-// ✅ FIXED: Only export the component to satisfy Fast Refresh
-export { Toggle };
+export { Toggle, toggleVariants };
