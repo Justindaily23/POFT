@@ -6,7 +6,7 @@ import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { createTestApp } from '../setup/test-app';
 import { loginAsAdmin } from '../auth/auth.helper';
-import { cleanDatabase, prisma as utilPrisma } from '../utils/database.util';
+import { cleanDatabase, disconnectUtilPrisma, prisma as utilPrisma } from '../utils/database.util';
 import { createPoExcelBuffer } from '../utils/excel.util';
 
 describe('PO Excel Import (E2E)', () => {
@@ -20,8 +20,12 @@ describe('PO Excel Import (E2E)', () => {
   });
 
   afterAll(async () => {
-    await app.close();
-    await utilPrisma.$disconnect();
+    // Close the Nest app and its internal Prisma connection
+    if (app) await app.close();
+    if (prisma) await prisma.$disconnect();
+
+    // 2. Close the utility connection used for cleaning/seeding
+    await disconnectUtilPrisma();
   });
 
   beforeEach(async () => {

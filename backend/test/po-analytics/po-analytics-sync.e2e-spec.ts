@@ -1,7 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { createTestApp } from '../setup/test-app';
-import { cleanDatabase, seedRequiredData } from '../utils/database.util';
+import { cleanDatabase, disconnectUtilPrisma, seedRequiredData } from '../utils/database.util';
 import { describe, it, expect, beforeAll, afterAll, jest } from '@jest/globals';
 import { AuthRole, PoLineStatus, PoAgingFlag, NotificationType } from '@prisma/client';
 import { PrismaService } from '../../src/prisma/prisma.service';
@@ -68,10 +68,13 @@ describe('PO Analytics & PM Dashboard E2E', () => {
   });
 
   afterAll(async () => {
-    if (prisma) await prisma.$disconnect();
+    // Close the Nest app and its internal Prisma connection
     if (app) await app.close();
-  });
+    if (prisma) await prisma.$disconnect();
 
+    // 2. Close the utility connection used for cleaning/seeding
+    await disconnectUtilPrisma();
+  });
   it('aggregates dashboard data and heals status to RED in the background', async () => {
     const notificationsService = app.get(NotificationsService);
     const notifySpy = jest.spyOn(notificationsService, 'notify');
@@ -105,9 +108,18 @@ describe('PO Analytics & PM Dashboard E2E', () => {
     await request(app.getHttpServer()).get('/pm-analytics/dashboard').set('Authorization', pmToken).expect(200);
 
     // Wait for the chunked promises to persist
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    // await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    const updatedLine = await prisma.purchaseOrderLine.findUnique({ where: { id: poLine.id } });
+    // const updatedLine = await prisma.purchaseOrderLine.findUnique({ where: { id: poLine.id } });
+    // expect(updatedLine?.agingFlag).toBe(PoAgingFlag.RED);
+    let updatedLine;
+    // Retry up to 5 times (total 2.5 seconds)
+    for (let i = 0; i < 5; i++) {
+      updatedLine = await prisma.purchaseOrderLine.findUnique({ where: { id: poLine.id } });
+      if (updatedLine?.agingFlag === PoAgingFlag.RED) break;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
     expect(updatedLine?.agingFlag).toBe(PoAgingFlag.RED);
 
     expect(updatedLine?.lastAgingNotifiedFlag).toBe(PoAgingFlag.RED);

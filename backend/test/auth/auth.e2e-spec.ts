@@ -4,6 +4,7 @@ import request from 'supertest';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { createTestApp } from '../setup/test-app';
 import * as bcrypt from 'bcrypt';
+import { disconnectUtilPrisma } from '../utils/database.util';
 
 describe('Auth E2E (Session Lifecycle)', () => {
   let app: INestApplication;
@@ -31,8 +32,12 @@ describe('Auth E2E (Session Lifecycle)', () => {
   });
 
   afterAll(async () => {
-    if (prisma) await prisma.$disconnect();
+    // Close the Nest app and its internal Prisma connection
     if (app) await app.close();
+    if (prisma) await prisma.$disconnect();
+
+    // 2. Close the utility connection used for cleaning/seeding
+    await disconnectUtilPrisma();
   });
 
   it('logs in admin', async () => {

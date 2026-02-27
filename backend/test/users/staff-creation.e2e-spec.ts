@@ -5,7 +5,7 @@ import { PrismaService } from '../../src/prisma/prisma.service';
 import { createTestApp } from '../setup/test-app';
 import { loginAsAdmin } from '../auth/auth.helper';
 import { AuthRole } from '@prisma/client';
-import { cleanDatabase, seedRequiredData } from '../utils/database.util';
+import { cleanDatabase, disconnectUtilPrisma, seedRequiredData } from '../utils/database.util';
 import { prisma as utilPrisma } from '../utils/database.util';
 import * as bcrypt from 'bcrypt';
 import { NotificationsService } from '../../src/notifications/notifications.service';
@@ -23,11 +23,13 @@ describe('Staff Creation Flow', () => {
   });
 
   afterAll(async () => {
-    await prisma.$disconnect();
-    await app.close();
-    await utilPrisma.$disconnect();
-  });
+    // Close the Nest app and its internal Prisma connection
+    if (app) await app.close();
+    if (prisma) await prisma.$disconnect();
 
+    // 2. Close the utility connection used for cleaning/seeding
+    await disconnectUtilPrisma();
+  });
   beforeEach(async () => {
     await cleanDatabase(); // Clears everything including Admin
 

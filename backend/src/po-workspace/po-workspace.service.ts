@@ -88,6 +88,7 @@ export class PoWorkspaceService {
 
     // 2. Metrics logic
     const allLinesForMetrics = await this.prisma.purchaseOrderLine.findMany({
+      where: lineWhere,
       select: {
         poLineAmount: true,
         contractAmount: true,

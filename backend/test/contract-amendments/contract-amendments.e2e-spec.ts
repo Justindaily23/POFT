@@ -1,7 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { createTestApp } from '../setup/test-app';
-import { cleanDatabase, seedRequiredData } from '../utils/database.util';
+import { cleanDatabase, disconnectUtilPrisma, seedRequiredData } from '../utils/database.util';
 import { describe, it, expect, beforeAll, afterAll, jest } from '@jest/globals';
 import { AuthRole } from '../../src/auth/enums/auth-name.enums';
 import { PrismaService } from '../../src/prisma/prisma.service';
@@ -50,10 +50,13 @@ describe('Contract Amendments E2E', () => {
   });
 
   afterAll(async () => {
-    if (prisma) await prisma.$disconnect();
+    // Close the Nest app and its internal Prisma connection
     if (app) await app.close();
-  });
+    if (prisma) await prisma.$disconnect();
 
+    // 2. Close the utility connection used for cleaning/seeding
+    await disconnectUtilPrisma();
+  });
   it('successfully amends a contract and notifies requesters', async () => {
     const notificationsService = app.get(NotificationsService);
     const notifySpy = jest.spyOn(notificationsService, 'notify');
