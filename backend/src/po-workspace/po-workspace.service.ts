@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { PoWorkspaceFilterDto } from './dto/po-workspace-filter.dto';
 import { FinancialMetrics, PoWorkspaceResponse } from './dto/po-workspace.response.dto';
-import { FundRequestStatus, Prisma } from '@prisma/client';
+import { PoLineStatus, Prisma } from '@prisma/client';
 import { PurchaseOrderLine } from './dto/po-workspace.response.dto';
 
 @Injectable()
@@ -11,21 +11,14 @@ export class PoWorkspaceService {
 
   async getPoTypes() {
     return this.prisma.poType.findMany({
-      select: {
-        id: true,
-        name: true,
-        code: true,
-      },
-      // Using the index you defined for high-performance sorting
-      orderBy: {
-        name: 'asc',
-      },
+      select: { id: true, name: true, code: true },
+      orderBy: { name: 'asc' },
     });
   }
-  async getWorkspace(filters: PoWorkspaceFilterDto): Promise<PoWorkspaceResponse> {
-    const { page = 1, limit = 20 } = filters; // default pagination
 
-    // --- Build line-level where filter ---
+  async getWorkspace(filters: PoWorkspaceFilterDto): Promise<PoWorkspaceResponse & { nextCursor: string | null }> {
+    const { limit = 20, cursor } = filters;
+
     const lineWhere: Prisma.PurchaseOrderLineWhereInput = {
       poType: filters.poTypes?.length ? { code: { in: filters.poTypes } } : undefined,
       pm: filters.pm ? { contains: filters.pm, mode: 'insensitive' } : undefined,
@@ -37,14 +30,11 @@ export class PoWorkspaceService {
       },
     };
 
-    // --- Fetch total count for pagination ---
-    const totalCount = await this.prisma.purchaseOrderLine.count({
-      where: lineWhere,
-    });
-
-    // --- Fetch paginated PO lines for table ---
+    // 1. Table Data
     const poLinesRaw = await this.prisma.purchaseOrderLine.findMany({
       where: lineWhere,
+      take: limit,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
       select: {
         id: true,
         poLineNumber: true,
@@ -57,25 +47,21 @@ export class PoWorkspaceService {
         itemCode: true,
         unitPrice: true,
         itemDescription: true,
+        totalApprovedAmount: true,
+        totalRequestedAmount: true,
+        totalRejectedAmount: true,
         poType: { select: { code: true } },
         purchaseOrder: {
           select: { duid: true, poNumber: true, prNumber: true, projectCode: true, projectName: true },
         },
-        FundRequests: { select: { requestedAmount: true, status: true } },
       },
       orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
     });
 
-    // --- Map to frontend shape ---
     const poLines: PurchaseOrderLine[] = poLinesRaw.map((line) => {
-      const totalApproved = line.FundRequests.filter((fr) => fr.status === FundRequestStatus.APPROVED).reduce(
-        (sum, fr) => sum + Number(fr.requestedAmount),
-        0,
-      );
-
-      const totalRequested = line.FundRequests.reduce((sum, fr) => sum + Number(fr.requestedAmount), 0);
+      // FIX: Number() never returns nullish values, so use || 0 inside to ensure safety
+      const totalApproved = Number(line.totalApprovedAmount || 0);
+      const contractAmt = line.contractAmount ? Number(line.contractAmount) : 0;
 
       return {
         id: line.id,
@@ -85,54 +71,86 @@ export class PoWorkspaceService {
         projectCode: line.purchaseOrder.projectCode ?? 'N/A',
         projectName: line.purchaseOrder.projectName ?? 'N/A',
         pm: line.pm ?? 'N/A',
-        poLineNumber: Number(line.poLineNumber),
+        poLineNumber: line.poLineNumber ?? 'N/A',
         poType: line.poType?.code ?? 'N/A',
-        unitPrice: Number(line.unitPrice) ?? 0,
+        unitPrice: Number(line.unitPrice || 0),
         requestedQuantity: line.requestedQuantity ?? 0,
-        poLineAmount: Number(line.poLineAmount) ?? 0,
-        allowedAgingDays: line.allowedOpenDays ?? 1,
+        poLineAmount: Number(line.poLineAmount || 0),
         itemDescription: line.itemDescription ?? 'N/A',
         contractAmount: line.contractAmount ? Number(line.contractAmount) : null,
         status: line.poLineStatus,
-        amountRequested: totalRequested,
+        amountRequested: Number(line.totalRequestedAmount || 0),
+        amountRejected: Number(line.totalRejectedAmount || 0),
         amountSpent: totalApproved,
-        balanceDue: (line.contractAmount ? Number(line.contractAmount) : 0) - totalApproved,
+        balanceDue: contractAmt - totalApproved,
       };
     });
 
-    // --- Compute metrics on all filtered rows (not paginated) ---
+    // 2. Metrics logic
     const allLinesForMetrics = await this.prisma.purchaseOrderLine.findMany({
-      where: lineWhere,
       select: {
         poLineAmount: true,
         contractAmount: true,
-        FundRequests: { select: { requestedAmount: true, status: true } },
+        totalApprovedAmount: true,
+        totalRequestedAmount: true,
+        totalRejectedAmount: true,
+        poLineStatus: true,
       },
     });
 
     const metrics: FinancialMetrics = allLinesForMetrics.reduce(
       (acc, line) => {
-        const totalApproved = line.FundRequests.filter((fr) => fr.status === FundRequestStatus.APPROVED).reduce(
-          (sum, fr) => sum + Number(fr.requestedAmount),
-          0,
-        );
-        const totalRequested = line.FundRequests.reduce((sum, fr) => sum + Number(fr.requestedAmount), 0);
+        const amount = Number(line.poLineAmount || 0);
+        const approved = Number(line.totalApprovedAmount || 0);
+        const rejected = Number(line.totalRejectedAmount || 0);
 
-        acc.totalPoAmount += Number(line.poLineAmount);
-        acc.totalContractAmount += line.contractAmount ? Number(line.contractAmount) : 0;
-        acc.totalAmountRequested += totalRequested;
-        acc.totalAmountSpent += totalApproved;
+        acc.totalPoAmount += amount;
+        acc.totalContractAmount += Number(line.contractAmount || 0);
+        acc.totalAmountRequested += Number(line.totalRequestedAmount || 0);
+        acc.totalAmountSpent += approved;
+        acc.totalAmountRejected += rejected;
+
+        if (line.poLineStatus === PoLineStatus.INVOICED) {
+          // This ensures totalInvoicedAmount is initialized or handled correctly
+          acc.totalInvoicedAmount = (acc.totalInvoicedAmount || 0) + amount;
+        }
+
         return acc;
       },
-      { totalPoAmount: 0, totalContractAmount: 0, totalAmountRequested: 0, totalAmountSpent: 0, balanceDue: 0 },
+      {
+        totalPoAmount: 0,
+        totalContractAmount: 0,
+        totalAmountRequested: 0,
+        totalAmountRejected: 0,
+        totalAmountSpent: 0,
+        totalInvoicedAmount: 0,
+        balanceDue: 0,
+      },
     );
 
     metrics.balanceDue = metrics.totalContractAmount - metrics.totalAmountSpent;
 
+    const nextCursor = poLinesRaw.length === limit ? poLinesRaw[poLinesRaw.length - 1].id : null;
+
     return {
       data: poLines,
       metrics,
-      totalCount,
+      totalCount: await this.prisma.purchaseOrderLine.count({ where: lineWhere }),
+      nextCursor,
     };
+  }
+
+  async updatePoLineStatus(id: string, status: PoLineStatus) {
+    try {
+      return await this.prisma.purchaseOrderLine.update({
+        where: { id },
+        data: { poLineStatus: status },
+        select: { id: true, poLineStatus: true },
+      });
+    } catch (error: unknown) {
+      // FIX: Type-safe error handling for production stability
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to update PO Line status: ${errorMessage}`);
+    }
   }
 }

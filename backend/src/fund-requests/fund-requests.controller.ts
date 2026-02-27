@@ -8,7 +8,6 @@ import { ApproveFundRequestDto } from './dto/approve-fund-request.dto';
 import { AuthRole } from 'src/auth/enums/auth-name.enums';
 import { POLineSearchResponseDto } from './dto/po-search-response.dto';
 import { FundRequestResponseDto } from './dto/fund-request-response.dto';
-// Import your shared interface
 import { RequestWithUser } from 'src/common/interfaces/request-with-user.interface';
 
 @Controller('fund-requests')
@@ -22,33 +21,63 @@ export class FundRequestsController {
     return this.fundRequestsService.fetchFundRequestData(query);
   }
 
+  // For PMs: fetch their own history
+  @Get('history')
+  @Roles(AuthRole.USER)
+  async getUserHistory(
+    @Req() req: RequestWithUser,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string, // Query params are strings by default
+  ) {
+    const userId = req.user.id;
+
+    // Convert limit to number safely, default to 20
+    const take = limit ? parseInt(limit, 10) : 20;
+
+    return this.fundRequestsService.getFundRequestHistory(userId, take, cursor);
+  }
+
   @Get('history/:poLineId')
-  async getHistory(@Param('poLineId') poLineId: string) {
+  getHistory(@Param('poLineId') poLineId: string) {
     return this.fundRequestsService.getFundRequestHistory(poLineId);
   }
 
+  //   // Optionally: history by PO line
+  // @Get('po-line/:poLineId')
+  // async getHistoryByPoLine(@Param('poLineId') poLineId: string) {
+  //   return this.fundRequestsService.getFundRequestHistoryByPoLine(poLineId);
+  // }
+
   @Post('submit')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(AuthRole.USER) // PM role
-  async create(@Body() dto: CreateFundRequestDto, @Req() req: RequestWithUser) {
-    const userId = req.user.sub; // Changed .id to .sub
+  create(@Body() dto: CreateFundRequestDto, @Req() req: RequestWithUser) {
+    const userId = req.user.id; // Changed .id to .sub
     return this.fundRequestsService.createFundRequest(dto, userId);
   }
 
-  @Get()
+  // For Admins: fetch all fund requests
+  @Get('admin')
   @Roles(AuthRole.SUPER_ADMIN)
-  async getFundRequest(@Req() req: RequestWithUser): Promise<FundRequestResponseDto[]> {
-    const userId = req.user.sub; // Changed .userId to .sub
-    return this.fundRequestsService.getFundRequestHistory(userId);
+  async getAllFundRequests(
+    @Query('query') query?: string,
+    @Query('status') status?: string,
+    @Query('fromDate') fromDate?: string,
+    @Query('toDate') toDate?: string,
+    @Query('cursor') cursor?: string, // 🟢 Added
+    @Query('limit') limit?: string, // 🟢 Added
+  ): Promise<{ data: FundRequestResponseDto[]; nextCursor: string | null }> {
+    // 🟢 Updated return type
+    const take = limit ? parseInt(limit, 10) : 20;
+
+    return this.fundRequestsService.getAllFundRequests({ query, status, fromDate, toDate }, take, cursor);
   }
 
-  @Patch(':id/approve')
+  @Patch(':id/action')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(AuthRole.SUPER_ADMIN)
-  async approveOrReject(
-    @Param('id') fundRequestId: string,
-    @Body() dto: ApproveFundRequestDto,
-    @Req() req: RequestWithUser,
-  ) {
-    const adminId = req.user.sub; // Changed .id to .sub
+  approveOrReject(@Param('id') fundRequestId: string, @Body() dto: ApproveFundRequestDto, @Req() req: RequestWithUser) {
+    const adminId = req.user.id; // Changed .id to .sub
     return this.fundRequestsService.approveOrRejectFundRequest(fundRequestId, dto, adminId);
   }
 }

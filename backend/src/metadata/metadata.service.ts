@@ -1,7 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateStaffRoleDto } from './dto/create-staff-role.dto';
-import { CreateStateDto } from './dto/create-state.dto';
 
 @Injectable()
 export class MetadataService {
@@ -44,6 +43,19 @@ export class MetadataService {
     });
   }
 
+  async getPoTypes() {
+    return this.prisma.poType.findMany({
+      select: {
+        id: true,
+        name: true,
+        code: true,
+      },
+      // Using the index you defined for high-performance sorting
+      orderBy: {
+        name: 'asc',
+      },
+    });
+  }
   // async createState(dto: CreateStateDto) {
   //   const code = this.generateCodeFromName(dto.name);
 

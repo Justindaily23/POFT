@@ -90,7 +90,10 @@ model User {
   // === Reverse relations ===
   fundRequestsCreated  FundRequest[]    @relation("FundRequestRequestedBy")
   fundRequestsApproved FundRequest[]    @relation("FundRequestApprovedBy")
+  fundRequestsRejected FundRequest[]    @relation("FundRequestRejectedBy")
   fundRequestHistory   FundRequestHistory[]
+  passwordResetTokens PasswordResetToken[]
+
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -116,6 +119,20 @@ model RefreshSession {
   @@unique([userId, deviceId])
   @@index([expiresAt])
 }
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique // This will store the hashed token
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  // Cascade delete ensures tokens are removed if a user is deleted
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+}
+
 
 // ============================== PO Management Schema =============================
 model PurchaseOrder {
@@ -171,6 +188,8 @@ model PurchaseOrderLine {
 
   //=======FINANCIAL CONTROL
   contractAmount      Decimal? @db.Decimal(15, 2)
+  totalRequestedAmount Decimal @default(0) @db.Decimal(15, 2)
+  totalRejectedAmount Decimal  @default(0) @db.Decimal(15, 2)
   totalApprovedAmount Decimal  @default(0) @db.Decimal(15, 2)
   remainingBalance    Decimal  @default(0) @db.Decimal(15, 2)
 
@@ -181,6 +200,7 @@ model PurchaseOrderLine {
 
   FundRequests       FundRequest[]
   ContractAmendments ContractAmendment[]
+  version             Int      @default(0) // contract amendment tracking to prevent data corruption when two people try to edit the same thing at the exact same time 
   fundRequestHistory FundRequestHistory[]
 
   createdAt DateTime @default(now())
@@ -262,7 +282,11 @@ model FundRequest {
   approvedBy     String?
   approvedByUser User?   @relation("FundRequestApprovedBy", fields: [approvedBy], references: [id])
 
+  rejectedBy     String?
+  rejectedByUser User?    @relation("FundRequestRejectedBy", fields: [rejectedBy], references: [id])
+
   approvedAt      DateTime?
+  rejectedAt      DateTime?
   rejectionReason String?
 
   createdAt DateTime @default(now())
@@ -361,6 +385,9 @@ enum NotificationType {
   CONTRACT_AMENDED
   PO_AGING_WARNING
   ACCOUNT_CREATED
+  PASSWORD_RESET
+  PASSWORD_CHANGED
+  PO_AGING_ALERT    
 }
 
 model FailedNotification {

@@ -1,6 +1,5 @@
 import { SetMetadata } from '@nestjs/common';
-import { AuthRole } from '../enums/auth-name.enums';
-
+import { AuthRole } from '@prisma/client';
 // Define a constant key to store roles metadata
 // Custom decorator to assign roles to a route handler or controller
 // Usage: @Roles(Role.ADMIN, Role.USER)

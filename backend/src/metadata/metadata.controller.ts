@@ -5,6 +5,7 @@ import { JwtAuthGuard } from 'src/auth/guards/jwt-auth-guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { AuthRole } from 'src/auth/enums/auth-name.enums';
+import { PoLineStatus, PoAgingFlag } from '@prisma/client';
 
 @Controller('metadata')
 @UseGuards(JwtAuthGuard) // base auth
@@ -41,6 +42,23 @@ export class MetadataController {
   @Get('states')
   getStates() {
     return this.metadataService.getStates();
+  }
+
+  @Get('po-types')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AuthRole.SUPER_ADMIN, AuthRole.ADMIN, AuthRole.USER)
+  async getPoTypes() {
+    // This will return an array of { id, code, name }
+    return this.metadataService.getPoTypes();
+  }
+
+  @Get('enums')
+  getMetadata() {
+    return {
+      // These return ["INVOICED", "NOT_INVOICED"] and ["GREEN", "WARNING", "RED"]
+      lineStatuses: Object.values(PoLineStatus),
+      agingFlags: Object.values(PoAgingFlag),
+    };
   }
 
   // @Post('states')

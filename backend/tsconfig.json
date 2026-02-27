@@ -22,10 +22,11 @@
     "resolvePackageJsonExports": false,
     "esModuleInterop": true,
     "isolatedModules": true,
+    "types": ["node"],
     "paths": {
-      "src/*": ["src/*"]
+      "@/*": ["src/*"]
     }
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "test", "**/*.spec.ts", "prisma.config.ts", "prisma"]
+  "exclude": ["node_modules", "dist", "test"]
 }

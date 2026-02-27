@@ -1,7 +1,10 @@
 export class FundRequestResponseDto {
+  id: string;
   poLineId: string;
   status: string;
   requestedAmount: number;
+  totalRequestedAmount: number;
+  totalApprovedAmount: number;
   contractAmount: number | null;
   cumulativeApprovedAmount: number;
   remainingBalance: number;
@@ -15,6 +18,7 @@ export class FundRequestResponseDto {
   poLineNumber: string | null;
   poTypeId: string | null;
   requestPurpose: string;
+  rejectionReason: string | null;
   createdAt: Date;
 
   itemDescription: string | null;

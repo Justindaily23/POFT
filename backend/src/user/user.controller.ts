@@ -20,32 +20,4 @@ export class UserController {
   createStaff(@Body() dto: CreateStaffAccountDto) {
     return this.userService.createStaffAccount(dto);
   }
-
-  // // GET /api/v1/auth-roles
-  // @Get('auth-roles')
-  // getAuthRoles() {
-  //   return [
-  //     { value: 'USER', label: 'User (Standard)' },
-  //     { value: 'ADMIN', label: 'Administrator' },
-  //     { value: 'SUPER_ADMIN', label: 'Super Admin' },
-  //   ];
-  // }
-
-  // // GET /api/v1/staff-roles
-  // @Get('staff-roles')
-  // async getStaffRoles() {
-  //   return this.prisma.staffRole.findMany({
-  //     select: { id: true, name: true, code: true }, // code optional for display/use
-  //     orderBy: { name: 'asc' },
-  //   });
-  // }
-
-  // // GET /api/v1/states
-  // @Get('states')
-  // async getStates() {
-  //   return this.prisma.state.findMany({
-  //     select: { id: true, name: true, code: true },
-  //     orderBy: { name: 'asc' },
-  //   });
-  // }
 }

@@ -1,3 +1,5 @@
+import { PoLineStatus } from '@prisma/client';
+
 export interface PurchaseOrderLine {
   id: string;
   duid: string;
@@ -6,22 +8,25 @@ export interface PurchaseOrderLine {
   projectCode: string;
   projectName: string;
   pm: string;
-  poLineNumber: number;
+  poLineNumber: string;
   poType: string;
   unitPrice: number;
   requestedQuantity: number;
   poLineAmount: number;
   itemDescription: string;
   contractAmount?: number | null;
-  status?: 'INVOICED' | 'NOT_INVOICED' | null;
+  status?: PoLineStatus | null;
   amountRequested: number;
+  amountRejected: number;
   amountSpent: number;
+  balanceDue: number;
 }
 
 export interface FinancialMetrics {
   totalPoAmount: number;
   totalContractAmount: number;
   totalAmountRequested: number;
+  totalAmountRejected: number;
   totalAmountSpent: number;
   balanceDue: number;
 }
@@ -29,5 +34,6 @@ export interface FinancialMetrics {
 export interface PoWorkspaceResponse {
   data: PurchaseOrderLine[];
   metrics: FinancialMetrics;
+  nextCursor?: string | null; // <-- new cursor-based pagination field
   totalCount: number;
 }

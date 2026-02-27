@@ -14,9 +14,9 @@ export class ContractAmendmentsController {
   constructor(private readonly contractAmendmentsService: ContractAmendmentsService) {}
 
   @Post()
-  @Roles(AuthRole.SUPER_ADMIN, AuthRole.ADMIN)
+  @Roles(AuthRole.SUPER_ADMIN)
   async create(@Body() dto: CreateContractAmendmentDto, @Req() req: RequestWithUser) {
     // Use .sub from your JwtPayload interface
-    return this.contractAmendmentsService.createAmendment(dto, req.user.sub);
+    return this.contractAmendmentsService.createAmendment(dto, req.user.id);
   }
 }

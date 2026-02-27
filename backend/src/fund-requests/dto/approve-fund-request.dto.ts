@@ -1,5 +1,5 @@
-// src/fund-requests/dto/approve-fund-request.dto.ts
-import { IsString, IsNotEmpty, IsOptional, IsEnum, ValidateIf, IsNumber, Min } from 'class-validator';
+import { Transform, TransformFnParams } from 'class-transformer';
+import { IsString, IsOptional, IsEnum, ValidateIf, IsNumber, Min } from 'class-validator';
 
 export enum ApprovalAction {
   APPROVE = 'APPROVE',
@@ -8,16 +8,27 @@ export enum ApprovalAction {
 
 export class ApproveFundRequestDto {
   @IsEnum(ApprovalAction)
+  @Transform(({ value }: TransformFnParams): string => (typeof value === 'string' ? value.trim() : (value as string)))
   action: ApprovalAction;
 
-  @ValidateIf((o) => o.action === ApprovalAction.REJECT) // Required only if rejecting
+  @ValidateIf((o: ApproveFundRequestDto) => o.action === ApprovalAction.REJECT)
   @IsString()
   @IsOptional()
-  rejectionReason?: string; // Required if action === REJECT
+  @Transform(({ value }: TransformFnParams): string | undefined =>
+    typeof value === 'string' ? value.trim() : (value as string | undefined),
+  )
+  rejectionReason?: string;
 
-  @ValidateIf((o) => o.action === ApprovalAction.APPROVE)
+  @ValidateIf((o: ApproveFundRequestDto) => o.action === ApprovalAction.APPROVE)
   @IsNumber()
   @IsOptional()
   @Min(0)
+  @Transform(({ value }: TransformFnParams): number | undefined => {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      return trimmed === '' ? undefined : Number(trimmed);
+    }
+    return value as number | undefined;
+  })
   setContractAmount?: number;
 }

@@ -1,43 +1,72 @@
-// src/contract-amendments/contract-amendments.service.ts
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateContractAmendmentDto } from './dto/create-contract-amendment.dto';
 import Decimal from 'decimal.js';
-
+import { logger } from 'src/common/logger/logger';
+import { NotificationType } from '@prisma/client';
+import { ContractAmendedPayload } from '@/notifications/types/notification-payload.interface';
 @Injectable()
 export class ContractAmendmentsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+  ) {}
 
   async createAmendment(dto: CreateContractAmendmentDto, adminId: string) {
     const { purchaseOrderLineId, newContractAmount, reason } = dto;
 
-    return this.prisma.$transaction(async (tx) => {
+    if (new Decimal(newContractAmount).lte(0)) {
+      throw new BadRequestException('Contract amount must be a positive value');
+    }
+    if (!reason || reason.trim().length < 5) {
+      throw new BadRequestException('A valid reason (min 5 characters) is required for audit');
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
       const poLine = await tx.purchaseOrderLine.findUnique({
         where: { id: purchaseOrderLineId },
       });
 
       if (!poLine) throw new NotFoundException('PO line not found');
 
-      // Cannot reduce below totalApprovedAmount
-      if (new Decimal(newContractAmount).lt(poLine.totalApprovedAmount)) {
+      const currentContractAmount = new Decimal(poLine.contractAmount ?? 0);
+      if (currentContractAmount.isZero()) {
         throw new BadRequestException(
-          `New contract amount (${newContractAmount}) cannot be less than total approved amount (${poLine.totalApprovedAmount})`,
+          'This PO line has no initial contract amount set. Please setup the contract first.',
         );
       }
 
+      const decimalNewAmount = new Decimal(newContractAmount);
+      const totalApproved = new Decimal(poLine.totalApprovedAmount ?? 0);
       const oldAmount = poLine.contractAmount ?? 0;
-      const remainingBalance = new Decimal(newContractAmount).minus(poLine.totalApprovedAmount);
 
-      // 1️⃣ Update PO line contractAmount & remainingBalance
-      await tx.purchaseOrderLine.update({
-        where: { id: poLine.id },
+      if (decimalNewAmount.lt(totalApproved)) {
+        // FIX: Added .toString() to totalApproved to resolve template literal error
+        throw new BadRequestException(
+          `Safety Violation: New amount (₦${newContractAmount}) cannot be less than the ₦${totalApproved.toString()} already approved for payment.`,
+        );
+      }
+
+      const remainingBalance = decimalNewAmount.minus(totalApproved);
+
+      const updateResult = await tx.purchaseOrderLine.updateMany({
+        where: {
+          id: purchaseOrderLineId,
+          version: poLine.version,
+        },
         data: {
           contractAmount: newContractAmount,
-          remainingBalance,
+          remainingBalance: remainingBalance.toNumber(),
+          version: { increment: 1 },
         },
       });
 
-      // 2️⃣ Record amendment for audit
+      if (updateResult.count === 0) {
+        logger.warn(`Conflict: PO Line ${purchaseOrderLineId} updated by another user.`);
+        throw new ConflictException('This record was modified by another user. Please refresh and try again.');
+      }
+
       const amendment = await tx.contractAmendment.create({
         data: {
           purchaseOrderLineId,
@@ -48,25 +77,47 @@ export class ContractAmendmentsService {
         },
       });
 
-      // 3️⃣ Notify PMs who requested fund on this PO line
       const fundRequesters = await tx.fundRequest.findMany({
-        where: { purchaseOrderLineId: poLine.id },
+        where: { purchaseOrderLineId },
         select: { requestedBy: true },
         distinct: ['requestedBy'],
       });
 
-      for (const user of fundRequesters) {
-        await tx.notification.create({
-          data: {
-            userId: user.requestedBy,
-            type: 'CONTRACT_AMENDED',
-            fundRequestId: null,
-            payload: { poLineId: poLine.id, newAmount: newContractAmount, oldAmount, reason },
-          },
-        });
-      }
-
-      return amendment;
+      return { amendment, fundRequesters };
     });
+
+    // 7. Async Notification Dispatch
+    if (result.fundRequesters.length > 0) {
+      // ✅ ADD THE TYPE TAG AND CAST TO THE CORRECT INTERFACE
+      const notificationPayload: ContractAmendedPayload = {
+        type: NotificationType.CONTRACT_AMENDED, // 👈 This resolves the TS2345 error
+        poLineId: purchaseOrderLineId,
+        newAmount: newContractAmount,
+        oldAmount: new Decimal(result.amendment.oldAmount).toNumber(),
+        reason,
+      };
+
+      const notificationPromises = result.fundRequesters.map((r) =>
+        this.notificationsService.notify(
+          r.requestedBy,
+          NotificationType.CONTRACT_AMENDED,
+          notificationPayload, // Use 'as any' here to satisfy the generic notify method
+        ),
+      );
+
+      Promise.all(notificationPromises).catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unknown notification error';
+        logger.error(`Notification loop failed: ${message}`);
+      });
+    }
+
+    const finalPoLine = await this.prisma.purchaseOrderLine.findUnique({
+      where: { id: purchaseOrderLineId },
+    });
+
+    return {
+      amendment: result.amendment,
+      updatedPoLine: finalPoLine,
+    };
   }
 }

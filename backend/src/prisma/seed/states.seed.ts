@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { PrismaService } from '../prisma.service';
-import { ConfigService, ConfigModule } from '@nestjs/config'; // Add ConfigModule
+import { ConfigModule } from '@nestjs/config'; // Add ConfigModule
 import { NIGERIAN_STATES } from '../data/states';
 
 // DO NOT import AppModule if it contains Auth/Jwt strategies
@@ -21,7 +21,6 @@ async function bootstrap() {
   });
 
   const prisma = app.get(PrismaService);
-  const configService = app.get(ConfigService);
 
   try {
     console.log('🌱 Seeding Nigerian States...');

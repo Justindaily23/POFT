@@ -1,5 +1,7 @@
 # compiled output
 /dist
+*.tsbuildinfo
+
 /node_modules
 /build
 backend/uploads/
@@ -14,6 +16,7 @@ lerna-debug.log*
 
 # OS
 .DS_Store
+
 
 # Tests
 /coverage
@@ -40,6 +43,8 @@ lerna-debug.log*
 .env.development
 .env.development.local
 .env.test.local
+.env.staging
+.env.production
 .env.production.local
 .env.local
 

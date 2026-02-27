@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
+import { MaintenanceGuard } from './common/guards/maintenance.guard';
+import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import configuration from './config/configuration';
 import { validationSchema } from './config/validation.schema';
 import { AuthModule } from './auth/auth.module';
@@ -11,28 +13,27 @@ import { PrismaModule } from './prisma/prisma.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CleanupService } from './cleanup/cleanup.service';
 import { MailerModule } from '@nestjs-modules/mailer';
-import { ConfigService } from '@nestjs/config';
-import { ContractAmendmentsService } from './contract-amendments/contract-amendments.service';
 import { BullModule } from '@nestjs/bull';
 import { FundRequestsModule } from './fund-requests/fund-requests.module';
 import { PoWorkspaceModule } from './po-workspace/po-workspace.module';
-import { PoAgingDaysModule } from './po-aging-days/po-aging-days.module';
+import { PoAgingDaysModule } from './po-analytics/po-aging-days.module';
 import { MetadataModule } from './metadata/metadata.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { CacheModule } from '@nestjs/cache-manager';
+import { redisStore } from 'cache-manager-redis-yet';
+import { ContractAmendmentsModule } from './contract-amendments/contract-amendments.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
-      isGlobal: true, // Makes config available globally
-      load: [configuration], // Load configuration
-      validationSchema, // Apply validation schema on start up
-      validationOptions: {
-        abortEarly: false, // Report all validation errors and not just the first one
-      },
-      envFilePath: ['.env', `.env.${process.env.NODE_ENV || 'development'}`], // Load environment variables from .env file based on NODE_ENV
-      cache: true, // Cache the configuration to improve performance
+      isGlobal: true,
+      load: [configuration],
+      validationSchema,
+      validationOptions: { abortEarly: false },
+      envFilePath: ['.env', `.env.${process.env.NODE_ENV || 'development'}`],
+      cache: true,
     }),
-    // Configure MailerModule here
+
     MailerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
@@ -49,6 +50,7 @@ import { NotificationsModule } from './notifications/notifications.module';
         },
       }),
     }),
+
     BullModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
@@ -57,17 +59,53 @@ import { NotificationsModule } from './notifications/notifications.module';
           port: config.get<number>('REDIS_PORT') || 6379,
           password: config.get('REDIS_PASSWORD'),
           db: config.get<number>('REDIS_DB') || 0,
-          tls: {
-            rejectUnauthorized: false,
-          },
+          tls: {}, // Keep this for Upstash (Bull will accept)
+          connectTimeout: 100_000,
+          disconnectTimeout: 2000,
+          keepAlive: 30_000,
           maxRetriesPerRequest: null,
+          retryStrategy: (times: number) => Math.min(times * 100, 3000),
+        },
+        settings: {
+          stalledInterval: 30_000,
+          guardInterval: 5000,
         },
       }),
     }),
-    BullModule.registerQueue({
-      name: 'notifications',
-    }),
 
+    BullModule.registerQueue({ name: 'notifications' }),
+
+    CacheModule.registerAsync({
+      isGlobal: true,
+      inject: [ConfigService],
+      useFactory: async (config: ConfigService) => {
+        // 🔒 E2E / TEST SAFETY GUARD
+        if (config.get('NODE_ENV') === 'test') {
+          return { ttl: 0 };
+        }
+        const host = config.get<string>('REDIS_HOST') || 'localhost';
+        const port = config.get<number>('REDIS_PORT') || 6379;
+        const password = config.get<string>('REDIS_PASSWORD');
+        const useTls = config.get('REDIS_USE_TLS') === 'true'; // for Render / Upstash
+
+        const socket = {
+          host,
+          port,
+          tls: useTls ? true : false, // ⚡ boolean only
+          reconnectStrategy: (retries: number) => Math.min(retries * 50, 500),
+          connectTimeout: 10000,
+        };
+
+        return {
+          store: await redisStore({
+            socket,
+            password: password || undefined,
+            ttl: 3600,
+          }),
+        };
+      },
+    }),
+    ContractAmendmentsModule,
     FundRequestsModule,
     NotificationsModule,
     AuthModule,
@@ -77,9 +115,16 @@ import { NotificationsModule } from './notifications/notifications.module';
     ScheduleModule.forRoot(),
     PoWorkspaceModule,
     PoAgingDaysModule,
-    MetadataModule, // enabels cron jobs
+    MetadataModule,
   ],
   controllers: [AppController],
-  providers: [AppService, CleanupService, ContractAmendmentsService],
+  providers: [
+    AppService,
+    CleanupService,
+    {
+      provide: APP_GUARD,
+      useClass: MaintenanceGuard,
+    },
+  ],
 })
 export class AppModule {}

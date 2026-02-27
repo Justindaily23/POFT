@@ -9,18 +9,20 @@ export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
   @Get()
-  findAll(@Req() req: RequestWithUser) {
-    return this.notificationsService.getUserNotifications(req.user.sub);
+  async findAll(@Req() req: RequestWithUser) {
+    // return this.notificationsService.getUserNotifications(req.user.id);
+    const userId = req.user.id;
+    return await this.notificationsService.getUserNotifications(userId);
   }
 
   @Get('unread-count')
   getUnread(@Req() req: RequestWithUser) {
-    return this.notificationsService.getUnreadCount(req.user.sub);
+    return this.notificationsService.getUnreadCount(req.user.id);
   }
 
   @Patch('read-all')
   markAllAsRead(@Req() req: RequestWithUser) {
-    return this.notificationsService.markAllAsRead(req.user.sub);
+    return this.notificationsService.markAllAsRead(req.user.id);
   }
 
   @Patch(':id/read')

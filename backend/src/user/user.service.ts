@@ -7,14 +7,14 @@ import { randomBytes } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { Prisma, NotificationType } from '@prisma/client';
 import { logger } from 'src/common/logger/logger';
-import { InjectQueue } from '@nestjs/bull';
-import { Queue } from 'bull';
+
+import { NotificationsService } from '@/notifications/notifications.service';
 
 @Injectable()
 export class UserService {
   constructor(
     private readonly prisma: PrismaService,
-    @InjectQueue('notifications') private readonly notificationsQueue: Queue,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async createStaffAccount(dto: CreateStaffAccountDto): Promise<StaffAccountResponseDto> {
@@ -56,24 +56,15 @@ export class UserService {
     })();
 
     try {
-      await this.notificationsQueue.add(
-        'send-notification',
-        {
-          userId: createdUser.id,
-          type: NotificationType.ACCOUNT_CREATED,
-          payload: { tempPassword, email: createdUser.email },
-        },
-        {
-          attempts: 3,
-          backoff: 5000,
-          removeOnComplete: true,
-          removeOnFail: false,
-        },
-      );
-    } catch (queueErr: unknown) {
-      // FIX: Use unknown here too
-      const qMsg = queueErr instanceof Error ? queueErr.message : 'Queue error';
-      logger.warn(`Failed to enqueue ACCOUNT_CREATED notification for ${createdUser.email}`, { error: qMsg });
+      await this.notificationsService.notify(createdUser.id, NotificationType.ACCOUNT_CREATED, {
+        type: NotificationType.ACCOUNT_CREATED,
+        email: createdUser.email,
+        tempPassword,
+        staffId: staffProfile.staffId,
+      });
+    } catch (noticeErr: unknown) {
+      const msg = noticeErr instanceof Error ? noticeErr.message : 'Unknown';
+      logger.warn(`Notification failed for ${createdUser.email}: ${msg}`);
     }
 
     return {
@@ -97,30 +88,51 @@ export class UserService {
     staffRoleId: string,
     stateId: string,
     tx: Prisma.TransactionClient,
-    roleCodeFromFrontend?: string,
   ): Promise<string> {
     const role = await tx.staffRole.findUnique({ where: { id: staffRoleId } });
     const state = await tx.state.findUnique({ where: { id: stateId } });
 
-    if (!role || !state) {
-      throw new BadRequestException('Invalid role or state');
+    if (!role || !state) throw new BadRequestException('Invalid role or state');
+
+    // 1. Generate the Role Code (e.g., "Project Manager" -> "PM")
+    const roleCode = role.name
+      .split(/\s+/)
+      .map((w) => w[0])
+      .join('')
+      .toUpperCase();
+    const stateCode = state.code.toUpperCase();
+
+    let isUnique = false;
+    let finalStaffId = '';
+    let randomValue = 0;
+
+    // 2. 🚀 THE RANDOMIZER LOOP: Ensures absolute uniqueness in Stecam
+    while (!isUnique) {
+      randomValue = Math.floor(10000 + Math.random() * 90000); // 5 digits
+      const padded = randomValue.toString().padStart(5, '0');
+      finalStaffId = `${companyCode}-${roleCode}-${stateCode}-${padded}`;
+
+      // Check if this ID is already used by someone else
+      const existing = await tx.staffProfile.findUnique({
+        where: { staffId: finalStaffId },
+      });
+
+      if (!existing) isUnique = true;
     }
 
-    const roleCode = roleCodeFromFrontend
-      ? roleCodeFromFrontend.toUpperCase()
-      : role.name
-          .split(/\s+/)
-          .map((word) => word[0]) // Extract first letter
-          .join('')
-          .toUpperCase();
-
-    const seq = await tx.staffIdSequence.upsert({
-      where: { company_roleCode_stateCode: { company: companyCode, roleCode, stateCode: state.code } },
-      update: { lastValue: { increment: 1 } },
-      create: { company: companyCode, roleCode, stateCode: state.code, lastValue: 1 },
+    // 3. Keep the Sequence Table in sync (Update it with the latest random value)
+    await tx.staffIdSequence.upsert({
+      where: {
+        company_roleCode_stateCode: {
+          company: companyCode,
+          roleCode,
+          stateCode,
+        },
+      },
+      update: { lastValue: randomValue }, // Store the most recent random hit
+      create: { company: companyCode, roleCode, stateCode, lastValue: randomValue },
     });
 
-    const padded = seq.lastValue.toString().padStart(5, '0');
-    return `${companyCode}-${roleCode}-${state.code}-${padded}`;
+    return finalStaffId;
   }
 }

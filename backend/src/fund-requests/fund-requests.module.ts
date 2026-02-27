@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bull';
 import { FundRequestsService } from './fund-requests.service';
-import { NotificationsService } from 'src/notifications/notifications.service';
 import { FundRequestsController } from './fund-requests.controller';
 import { NotificationsModule } from 'src/notifications/notifications.module';
 
@@ -13,7 +12,7 @@ import { NotificationsModule } from 'src/notifications/notifications.module';
     NotificationsModule,
   ],
   controllers: [FundRequestsController],
-  providers: [FundRequestsService, NotificationsService],
+  providers: [FundRequestsService],
   exports: [FundRequestsService],
 })
 export class FundRequestsModule {} // The class body should usually be empty

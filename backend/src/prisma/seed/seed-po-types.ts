@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { PrismaService } from '../prisma.service';
-import { ConfigService, ConfigModule } from '@nestjs/config'; // Add ConfigModule
+import { ConfigModule } from '@nestjs/config'; // Add ConfigModule
 import { randomUUID } from 'crypto';
 
 // DO NOT import AppModule if it contains Auth/Jwt strategies
