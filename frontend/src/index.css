@@ -52,11 +52,21 @@
   * {
     @apply border-border;
   }
+
+  /* Force everything to fit the screen exactly */
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden; /* This stops the 'too long' scrolling */
+  }
+
   body {
     @apply bg-background text-foreground;
     font-family: "Geist", sans-serif;
-    margin: 0;
-    padding: 0;
-    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
   }
 }

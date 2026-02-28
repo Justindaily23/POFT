@@ -1,16 +1,19 @@
 import { Header } from "@/components/login/Header";
 import { Footer } from "@/components/login/Footer";
 import { LoginForm } from "@/components/login/LoginForm";
-import { ShieldCheck, Lock, HelpCircle } from "lucide-react"; // Added HelpCircle
-import { Link } from "react-router-dom"; // Added Link
+import { ShieldCheck, Lock, HelpCircle } from "lucide-react";
+import { Link } from "react-router-dom";
 
 export default function LoginPage() {
   return (
-    <div className="flex flex-col h-screen bg-[radial-gradient(ellipse_at_top,var(--tw-gradient-stops))] from-slate-50 via-white to-slate-100 font-sans overflow-hidden">
+    /* FIXED: Changed h-screen to min-h-screen and removed overflow-hidden to prevent cutting off the footer */
+    <div className="flex flex-col min-h-screen bg-[radial-gradient(ellipse_at_top,var(--tw-gradient-stops))] from-slate-50 via-white to-slate-100 font-sans">
       <Header />
 
-      <main className="flex flex-1 items-center justify-center px-4 overflow-hidden">
-        <div className="w-full max-w-115 max-h-full flex flex-col justify-center animate-in fade-in zoom-in-95 duration-500">
+      {/* FIXED: Added padding y-8 to give space between header/footer on small screens */}
+      <main className="flex flex-1 items-center justify-center px-4 py-8">
+        {/* FIXED: Changed max-w-115 (non-standard) to max-w-lg (512px) for better production compatibility */}
+        <div className="w-full max-w-lg flex flex-col justify-center animate-in fade-in zoom-in-95 duration-500">
           {/* Brand Title */}
           <div className="flex flex-col items-center mb-6 md:mb-8">
             <div className="flex items-center gap-3 md:gap-5 mb-2 w-full justify-center opacity-90">
@@ -29,10 +32,11 @@ export default function LoginPage() {
           </div>
 
           {/* Login Card */}
-          <div className="bg-white/95 backdrop-blur-2xl rounded-[2.5rem] md:rounded-[3rem] shadow-[0_20px_60px_rgba(0,0,0,0.06)] border border-white p-6 md:p-12 relative overflow-hidden">
+          {/* FIXED: Adjusted padding from p-12 to p-8/10 to ensure it fits on laptop screens without zooming */}
+          <div className="bg-white/95 backdrop-blur-2xl rounded-[2.5rem] md:rounded-[3rem] shadow-[0_20px_60px_rgba(0,0,0,0.06)] border border-white p-6 md:p-10 relative overflow-hidden">
             <div className="absolute top-0 left-0 right-0 h-2.5 bg-blue-600" />
 
-            <div className="mb-8 md:mb-10 text-center">
+            <div className="mb-6 md:mb-8 text-center">
               <h2 className="text-[10px] md:text-[11px] font-black uppercase tracking-[0.25em] text-slate-700 mb-3">
                 Identity Verification
               </h2>
@@ -42,7 +46,7 @@ export default function LoginPage() {
             <LoginForm />
 
             {/* Secure Footer Section */}
-            <div className="mt-8 md:mt-10 pt-6 border-t border-slate-100 flex items-center justify-center">
+            <div className="mt-6 md:mt-8 pt-6 border-t border-slate-100 flex items-center justify-center">
               <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 rounded-full border border-slate-100">
                 <ShieldCheck className="h-4 w-4 text-emerald-500" />
                 <span className="text-[9px] md:text-[10px] font-black text-slate-700 uppercase tracking-wider">
