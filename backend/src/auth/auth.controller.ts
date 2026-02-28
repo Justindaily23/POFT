@@ -122,7 +122,6 @@ export class AuthController {
     if (!email) {
       throw new BadRequestException('Email is required');
     }
-    // This method needs to be created in your AuthService
     return this.authService.forgotPasswordInitiate(email);
   }
 

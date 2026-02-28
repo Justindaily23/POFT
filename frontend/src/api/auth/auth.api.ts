@@ -73,9 +73,12 @@ export const authApi = {
     }
   },
 
-  resetPassword: async (oldPassword: string, newPassword: string): Promise<{ message: string }> => {
+  // frontend/src/api/auth/auth.api.ts
+
+  resetPassword: async (newPassword: string): Promise<{ message: string }> => {
+    // 1. No userId needed in arguments (Backend gets it from the Token)
+    // 2. ONLY send newPassword in the body to satisfy the DTO
     const response = await apiClient.post("/auth/reset-password", {
-      oldPassword,
       newPassword,
     });
     return response.data;

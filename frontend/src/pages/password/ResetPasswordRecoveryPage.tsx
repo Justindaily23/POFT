@@ -24,6 +24,8 @@ const recoverySchema = z
 
 type RecoveryValues = z.infer<typeof recoverySchema>;
 
+// A user who is already logged in but foreced to change his or her passowrd
+
 export default function ResetPasswordRecoveryPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();

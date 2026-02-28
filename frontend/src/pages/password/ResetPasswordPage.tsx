@@ -43,7 +43,9 @@ export default function ResetPasswordPage() {
 
   // 3. Unified Mutation Hook
   const resetMutation = useMutation({
-    mutationFn: (data: ResetPasswordValues) => authApi.resetPassword("", data.newPassword),
+    // FIX: Only pass the newPassword. The backend gets the UserID from the JWT!
+    mutationFn: (data: ResetPasswordValues) => authApi.resetPassword(data.newPassword),
+
     onSuccess: () => {
       toast.success("Security Update Successful", {
         description: "Your password has been changed. Please log in again.",
@@ -52,8 +54,11 @@ export default function ResetPasswordPage() {
       navigate("/login", { replace: true });
     },
     onError: (error: AppAxiosError) => {
+      // Standardized error handling for NestJS ValidationPipe errors
       const message = error.response?.data?.message || "Failed to update password";
-      toast.error("Update Error", { description: Array.isArray(message) ? message[0] : message });
+      toast.error("Update Error", {
+        description: Array.isArray(message) ? message[0] : message,
+      });
     },
   });
 
