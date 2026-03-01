@@ -9,7 +9,7 @@ async function bootstrap() {
   const port = process.env.PORT || 3000;
 
   app.enableCors({
-    origin: ['http://localhost:5173', 'https://stecam.vercel.app'],
+    origin: ['http://localhost:5173', 'http://localhost:4173', 'https://stecam.vercel.app'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     credentials: true,
     maxAge: 3600,

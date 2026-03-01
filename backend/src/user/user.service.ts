@@ -55,18 +55,20 @@ export class UserService {
       }
     })();
 
-    try {
-      await this.notificationsService.notify(createdUser.id, NotificationType.ACCOUNT_CREATED, {
+    // Remove the 'await' so the user doesn't wait for the email to send
+    this.notificationsService
+      .notify(createdUser.id, NotificationType.ACCOUNT_CREATED, {
         type: NotificationType.ACCOUNT_CREATED,
         email: createdUser.email,
         tempPassword,
         staffId: staffProfile.staffId,
+      })
+      .catch((noticeErr) => {
+        const msg = noticeErr instanceof Error ? noticeErr.message : 'Unknown';
+        logger.warn(`Notification failed for ${createdUser.email}: ${msg}`);
       });
-    } catch (noticeErr: unknown) {
-      const msg = noticeErr instanceof Error ? noticeErr.message : 'Unknown';
-      logger.warn(`Notification failed for ${createdUser.email}: ${msg}`);
-    }
 
+    // Return immediately
     return {
       user: { ...createdUser, tempPassword },
       staffProfile,
