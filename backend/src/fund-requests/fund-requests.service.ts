@@ -212,7 +212,7 @@ export class FundRequestsService {
         requestedBy: fundRequest.requestedBy,
       };
 
-      await Promise.all(
+      Promise.all(
         admins.map((admin) =>
           this.notificationsService.notify(admin.id, NotificationType.FUND_REQUEST_CREATED, payload, fundRequest.id),
         ),
@@ -269,7 +269,7 @@ export class FundRequestsService {
     if (fundRequest.status !== FundRequestStatus.PENDING) {
       const isApproved = fundRequest.status === FundRequestStatus.APPROVED;
 
-      await this.notificationsService.notify(
+      this.notificationsService.notify(
         fundRequest.requestedBy,
         isApproved ? NotificationType.FUND_REQUEST_APPROVED : NotificationType.FUND_REQUEST_REJECTED,
         isApproved
