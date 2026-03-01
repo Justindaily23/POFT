@@ -168,7 +168,8 @@ export function FilterPanel({ filters, onFilterChange }: FilterPanelProps) {
             </button>
 
             {isPoTypeOpen && (
-              <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border border-border rounded-md shadow-lg max-h-48 overflow-auto animate-in fade-in zoom-in-95">
+              <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white  border border-border rounded-md shadow-[0_10px_20px_rgba(0,0,0,0.2)] max-h-48 overflow-auto animate-in fade-in zoom-in-95">
+                {" "}
                 {/* SWAPPED: Now mapping through your real DB types */}
                 {poTypes?.map((type) => (
                   <button

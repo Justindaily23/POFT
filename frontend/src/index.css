@@ -49,24 +49,46 @@
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
-
   /* Force everything to fit the screen exactly */
   html,
   body,
   #root {
-    height: 100%;
+    min-height: 100%;
     margin: 0;
     padding: 0;
-    overflow: hidden; /* This stops the 'too long' scrolling */
   }
 
   body {
     @apply bg-background text-foreground;
     font-family: "Geist", sans-serif;
-    display: flex;
     flex-direction: column;
+    background-color: var(--background);
+    display: block;
   }
+}
+
+/* THE MIRAGE KILLER: Forces all dropdowns/portals to be solid white */
+[role="menu"],
+[role="listbox"],
+[role="popover"],
+[role="combobox"],
+[data-radix-popper-content-wrapper],
+[cmdk-popover],      /* Add this */
+[cmdk-root],         /* Add this */
+.command-content,    /* Add this */
+.dropdown-content,
+.select-content,
+.popover-content {
+  background-color: white !important; /* Hard fallback */
+  background: var(--background) !important; /* Uses your oklch white */
+  opacity: 1 !important;
+  z-index: 9999 !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Ensure dropdown items aren't transparent either */
+[role="menuitem"],
+[role="option"] {
+  background-color: var(--background) !important;
 }
