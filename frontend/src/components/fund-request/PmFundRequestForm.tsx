@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { DollarSign, Landmark, Loader2, AlertCircle } from "lucide-react";
+import { Landmark, Loader2, AlertCircle } from "lucide-react";
 import type { UseFormReturn } from "react-hook-form";
 import type { CreateFundRequestInput } from "../../utils/fund-request/schema";
 import type { POLineSearchResponseData } from "../../types/fund-request/fundRequest.type";
@@ -37,7 +37,6 @@ export default function FundRequestForm({
           <div className="h-1.5 bg-linear-to-r from-slate-700 to-slate-900" />
           <CardHeader className="p-4 sm:p-6 pb-4">
             <CardTitle className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-3">
-              <DollarSign className="h-5 w-5 text-blue-600" />
               New Fund Request
             </CardTitle>
           </CardHeader>
@@ -50,7 +49,6 @@ export default function FundRequestForm({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-[11px] font-black uppercase text-slate-600 tracking-widest flex items-center gap-2">
-                    <DollarSign className="h-3.5 w-3.5" />
                     Requested Amount (₦) *
                   </FormLabel>
                   <FormControl>

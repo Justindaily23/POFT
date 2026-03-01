@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom"; // Add this line
 
 // Utils & Types
 import { fundRequestSchema, type CreateFundRequestInput } from "@/utils/fund-request/schema";
@@ -25,6 +26,7 @@ export default function PmFundRequestPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const debouncedSearchTerm = useDebouncedValue(searchTerm, 400);
   const [selectedPOLine, setSelectedPOLine] = useState<POLineSearchResponseData | null>(null);
+  const navigate = useNavigate(); // Initialize it here
 
   const form = useForm<CreateFundRequestInput>({
     resolver: zodResolver(fundRequestSchema),
@@ -68,11 +70,13 @@ export default function PmFundRequestPage() {
         toast.success("Success", { description: "Fund request submitted successfully!" });
         form.reset();
         setSelectedPOLine(null);
+        navigate("/pm/notifications");
       },
       onError: (error: unknown) => {
         const err = error as EnhancedError;
         toast.error("Submission Failed", { description: err.message });
       },
+      onSettled: () => {},
     });
   };
 
