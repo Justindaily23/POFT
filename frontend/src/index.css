@@ -71,21 +71,19 @@
 }
 
 @layer base {
-  /* Force everything to fit the screen exactly */
-  html,
-  body,
-  #root {
-    min-height: 100%;
-    margin: 0;
-    padding: 0;
+  html {
+    /* This makes 1rem = 14px, instantly tightening the whole UI */
+    font-size: 14px;
+    -webkit-text-size-adjust: 100%;
   }
 
   body {
-    @apply bg-background text-foreground;
+    /* Change 'display: block' to 'min-h-dvh' for Vercel/Mobile stability */
+    @apply bg-background text-foreground antialiased;
     font-family: "Geist", sans-serif;
+    min-height: 100dvh;
+    display: flex;
     flex-direction: column;
-    background-color: var(--background);
-    display: block;
   }
 }
 

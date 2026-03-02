@@ -24,7 +24,7 @@ export default function LoginPage() {
           FIX 3: Standard max-w-lg (512px) ensures Vite/Tailwind v4 
           recognizes the width correctly on Vercel. 
         */}
-        <div className="w-full max-w-lg flex flex-col justify-center animate-in fade-in zoom-in-95 duration-500 py-4">
+        <div className="w-full max-w-md flex flex-col justify-center animate-in fade-in zoom-in-95 duration-500 py-4">
           {/* Brand Title */}
           <div className="flex flex-col items-center mb-6 md:mb-8">
             <div className="flex items-center gap-3 md:gap-5 mb-2 w-full justify-center opacity-90">
@@ -47,7 +47,7 @@ export default function LoginPage() {
             FIX 4: Use bg-white instead of white/95 to prevent "Mirage" transparency issues.
             Reduced padding to p-8 to ensure it fits comfortably on 13-inch laptop screens.
           */}
-          <div className="bg-white rounded-[2rem] md:rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.08)] border border-slate-100 p-6 md:p-8 relative overflow-hidden">
+          <div className="bg-white rounded-3x1 md:rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.08)] border border-slate-100 p-6 md:p-8 relative overflow-hidden">
             <div className="absolute top-0 left-0 right-0 h-1.5 bg-blue-600" />
 
             <div className="mb-6 text-center">
@@ -75,7 +75,7 @@ export default function LoginPage() {
           <div className="mt-6 flex flex-col items-center space-y-3">
             <Link
               to="/forgot-password"
-              className="flex items-center gap-2 text-[11px] md:text-[12px] font-black text-slate-500 hover:text-blue-600 uppercase tracking-widest transition-all group"
+              className="flex items-center gap-2 text-[11px] md:text-[12px] font-black text-slate-600 hover:text-blue-600 uppercase tracking-widest transition-all group"
             >
               <HelpCircle className="h-3.5 w-3.5 group-hover:rotate-12 transition-transform" />
               <span>Forgot Credentials?</span>
@@ -84,7 +84,7 @@ export default function LoginPage() {
               </span>
             </Link>
 
-            <p className="text-[8px] md:text-[9px] text-slate-400 font-black uppercase tracking-widest opacity-60">
+            <p className="text-[10px] md:text-[9px] text-slate-600 font-black uppercase tracking-widest opacity-60">
               © {new Date().getFullYear()} Stecam Group Systems
             </p>
           </div>
