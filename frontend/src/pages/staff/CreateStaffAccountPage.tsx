@@ -32,7 +32,10 @@ const PERMISSION_OPTIONS = [
 ];
 
 export default function CreateStaffAccountPage() {
-  const [showPwdModal, setShowPwdModal] = useState<string | null>(null);
+  const [generatedCredentials, setGeneratedCredentials] = useState<{
+    staffId: string;
+    pass: string;
+  } | null>(null);
   const [newRoleName, setNewRoleName] = useState("");
 
   const { roles, states, createStaff, createRole, isSubmitting } = useStaffAccount();
@@ -61,10 +64,13 @@ export default function CreateStaffAccountPage() {
       },
       {
         onSuccess: (res) => {
-          setShowPwdModal(res.user.tempPassword ?? null);
+          setGeneratedCredentials({
+            staffId: res.staffProfile.staffId,
+            pass: res.user.tempPassword,
+          });
           reset();
           toast.success("Success", {
-            description: "Staff account created successfully.",
+            description: `${res.message || "Staff account created successfully."}`,
           });
         },
       },
@@ -170,8 +176,12 @@ export default function CreateStaffAccountPage() {
         />
       </div>
 
-      {showPwdModal && (
-        <PasswordModal password={showPwdModal} onClose={() => setShowPwdModal(null)} />
+      {generatedCredentials && (
+        <PasswordModal
+          staffId={generatedCredentials.staffId}
+          password={generatedCredentials.pass}
+          onClose={() => setGeneratedCredentials(null)}
+        />
       )}
     </div>
   );

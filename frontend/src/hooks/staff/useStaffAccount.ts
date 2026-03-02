@@ -10,13 +10,22 @@ import type {
 } from "@/pages/staff/dto/create-staff-account.dto";
 
 // 1. Define Success Response Types to replace 'any'
-interface CreateStaffResponse {
+export interface CreateStaffResponse {
   user: {
     id: string;
     email: string;
-    tempPassword?: string; // Needed for your password modal
+    fullName: string;
+    role: string;
+    tempPassword: string; // Required for your PasswordModal
   };
-  message?: string;
+  staffProfile: {
+    // Now TypeScript knows this exists
+    staffId: string;
+    roleId: string;
+    stateId: string;
+    isActive: boolean;
+  };
+  message?: string; // Optional if you decide to return it from NestJS
 }
 
 interface CreateRoleResponse {
