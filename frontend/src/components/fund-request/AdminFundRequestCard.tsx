@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { fundRequestApi } from "@/api/fund-request/fundRequest.api";
 import type { FundRequestResponseDto } from "@/types/fund-request/fundRequest.type";
-import type { AppAxiosError } from "@/types/api/api.types";
+import type { AppAxiosError, BackendErrorData } from "@/types/api/api.types";
 import { formatNaira } from "@/utils/fund-request/schema";
 import { toast } from "sonner";
 import { User, Wallet, Clock, ShieldCheck } from "lucide-react";
@@ -47,12 +47,18 @@ export default function AdminFundRequestCard({ request, isHistory = false }: Adm
       toast.success("Request approved successfully!");
       queryClient.invalidateQueries({ queryKey: ["adminFundRequests"] });
     },
-    onError: (error: AppAxiosError) => {
-      const data = error.response?.data;
-      if (data?.requiresContract) {
-        setShowApproveModal(true);
+    onError: (error: BackendErrorData) => {
+      // 🛡️ Access the property DIRECTLY from the error object (not error.response)
+      const needsContract = error.requiresContract === true;
+
+      if (needsContract) {
+        // Ensure state is fresh
+        setShowApproveModal(false);
+        setTimeout(() => {
+          setShowApproveModal(true);
+        }, 50);
       } else {
-        toast.error(data?.message || "Failed to approve request.");
+        toast.error(error.message || "Failed to approve request.");
       }
     },
   });
@@ -294,7 +300,8 @@ function DetailRow({
       </span>
       {/* Fallback to "0" or "N/A" here to stop NaN from showing up */}
       <span className={`font-semibold truncate ml-4 ${valueClass}`}>
-        {value === "NaN" || value === null || value === undefined ? "0" : value}
+        {/* Check for null/undefined first, then check the string representation */}
+        {!value || String(value).includes("NaN") ? "₦0.00" : value}
       </span>
     </div>
   );

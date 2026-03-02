@@ -87,7 +87,7 @@ export const fundRequestApi = {
     } catch (error) {
       // ✅ PRODUCTION TIP: Re-throws via handleApiError utility
       // so TanStack Query triggers its 'onError' callback.
-      return handleApiError(error);
+      throw handleApiError(error);
     }
   },
 

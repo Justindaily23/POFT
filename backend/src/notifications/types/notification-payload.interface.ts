@@ -42,13 +42,20 @@ export interface ContractAmendedPayload {
 export interface FundRequestStatusPayload {
   type: typeof NotificationType.FUND_REQUEST_APPROVED | typeof NotificationType.FUND_REQUEST_REJECTED;
   duid: string;
-  poNumber?: string;
-  itemDescription?: string;
   status: string;
   requestedAmount: number;
-  poLineNumber: string | null;
-  remainingBalance?: number; // Optional: Only for Approved
-  rejectionReason?: string; // Optional: Only for Rejected
+
+  // 🛡️ SYNC: Allow both null (Prisma) and undefined (Optional)
+  poNumber?: string | null;
+  projectCode?: string | null;
+  projectName?: string | null;
+  pm?: string | null;
+  itemDescription?: string | null;
+  poLineNumber?: string | null; // 🔥 This was the source of your last error
+
+  contractAmount?: number | null;
+  remainingBalance?: number | null;
+  rejectionReason?: string | null;
 }
 
 export interface FullFundRequestPayload {

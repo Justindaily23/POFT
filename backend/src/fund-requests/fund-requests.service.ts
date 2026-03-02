@@ -23,6 +23,7 @@ import { Queue } from 'bull';
 import { POLineSearchResponseDto } from './dto/po-search-response.dto';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { FullFundRequestPayload } from '@/notifications/types/notification-payload.interface';
+import { logger } from '@/common/logger/logger';
 
 /** Extended type to include nested relations */
 type FundRequestWithRelations = FundRequest & {
@@ -201,6 +202,7 @@ export class FundRequestsService {
         prNumber: dto.prNumber,
         poNumber: dto.poNumber,
         poLineAmount: Number(dto.poLineAmount) || 0,
+        poLineNumber: dto.poLineNumber,
         itemDescription: dto.itemDescription,
         requestPurpose: dto.requestPurpose,
         pm: dto.pm,
@@ -212,11 +214,14 @@ export class FundRequestsService {
         requestedBy: fundRequest.requestedBy,
       };
 
-      Promise.all(
+      void Promise.all(
         admins.map((admin) =>
           this.notificationsService.notify(admin.id, NotificationType.FUND_REQUEST_CREATED, payload, fundRequest.id),
         ),
-      );
+      ).catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unknown notification error';
+        logger.error(`[Admin Notification Failed] Request ${fundRequest.id}: ${message}`);
+      });
     }
 
     // ✅ Ensure mapToResponseDto also uses safeNumber helpers internally
@@ -269,28 +274,49 @@ export class FundRequestsService {
     if (fundRequest.status !== FundRequestStatus.PENDING) {
       const isApproved = fundRequest.status === FundRequestStatus.APPROVED;
 
-      this.notificationsService.notify(
-        fundRequest.requestedBy,
-        isApproved ? NotificationType.FUND_REQUEST_APPROVED : NotificationType.FUND_REQUEST_REJECTED,
-        isApproved
-          ? {
-              type: NotificationType.FUND_REQUEST_APPROVED,
-              duid: fundRequest.purchaseOrderLine.purchaseOrder.duid, // 👈 Correct path
-              status: fundRequest.status,
-              requestedAmount: (fundRequest.requestedAmount ?? new Prisma.Decimal(0)).toNumber(),
-              remainingBalance: (fundRequest.purchaseOrderLine.remainingBalance ?? new Prisma.Decimal(0)).toNumber(),
-              poLineNumber: fundRequest.purchaseOrderLine.poLineNumber,
-            }
-          : {
-              type: NotificationType.FUND_REQUEST_REJECTED,
-              duid: fundRequest.purchaseOrderLine.purchaseOrder.duid, // 👈 Correct path
-              status: fundRequest.status,
-              requestedAmount: (fundRequest.requestedAmount ?? new Prisma.Decimal(0)).toNumber(),
-              rejectionReason: fundRequest.rejectionReason ?? 'N/A',
-              poLineNumber: fundRequest.purchaseOrderLine.poLineNumber,
-            },
-        fundRequest.id,
-      );
+      // 💡 Create shortcuts for cleaner code
+      const poLine = fundRequest.purchaseOrderLine;
+      const po = poLine.purchaseOrder;
+
+      void this.notificationsService
+        .notify(
+          fundRequest.requestedBy,
+          isApproved ? NotificationType.FUND_REQUEST_APPROVED : NotificationType.FUND_REQUEST_REJECTED,
+          isApproved
+            ? {
+                type: NotificationType.FUND_REQUEST_APPROVED,
+                duid: po.duid,
+                // 🔥 Use ?? undefined to convert nulls from Prisma
+                poNumber: po.poNumber ?? undefined,
+                projectName: po.projectName ?? undefined,
+                projectCode: po.projectCode ?? undefined,
+                pm: poLine.pm ?? undefined,
+                itemDescription: poLine.itemDescription ?? undefined,
+                status: fundRequest.status,
+                requestedAmount: (fundRequest.requestedAmount ?? new Prisma.Decimal(0)).toNumber(),
+                contractAmount: (poLine.contractAmount ?? new Prisma.Decimal(0)).toNumber(),
+                remainingBalance: (poLine.remainingBalance ?? new Prisma.Decimal(0)).toNumber(),
+                poLineNumber: poLine.poLineNumber ?? undefined,
+              }
+            : {
+                type: NotificationType.FUND_REQUEST_REJECTED,
+                duid: po.duid,
+                poNumber: po.poNumber ?? undefined,
+                projectName: po.projectName ?? undefined,
+                pm: poLine.pm ?? undefined,
+                itemDescription: poLine.itemDescription ?? undefined,
+                status: fundRequest.status,
+                requestedAmount: (fundRequest.requestedAmount ?? new Prisma.Decimal(0)).toNumber(),
+                rejectionReason: fundRequest.rejectionReason ?? 'No reason provided',
+                poLineNumber: poLine.poLineNumber ?? undefined,
+              },
+          fundRequest.id,
+        )
+        .catch((err: unknown) => {
+          // Log background failures without interrupting the main user response
+          const message = err instanceof Error ? err.message : 'Unknown notification error';
+          logger.error(`[Notification Error] Request ${fundRequest.id}: ${message}`);
+        });
     }
 
     // 3. Map to DTO for the frontend
