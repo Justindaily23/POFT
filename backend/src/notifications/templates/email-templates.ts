@@ -48,7 +48,7 @@ export const EmailTemplates: EmailTemplateRegistry = {
     subject: `New Fund Request: ${p.duid}`,
     html: emailWrapper(
       'New Fund Request Created',
-      `A new request for <strong>${p.duid} PoNo: ${p.poNumber}</strong> requires review:
+      `A new request for <strong>${p.duid} PoNo: ${p.poNumber} Line: ${p.poLineNumber}</strong> requires review:
        <div style="margin-top: 16px; padding: 16px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
          <p style="margin:0;"><strong>Amount:</strong> ₦${(p.requestedAmount || 0).toLocaleString()}</p>
           <p style="margin:8px 0 0 0;"><strong>PM:</strong> ${p.pm}</p>
@@ -62,7 +62,12 @@ export const EmailTemplates: EmailTemplateRegistry = {
     subject: `Fund Request Approved: ${p.poNumber || 'N/A'}`,
     html: emailWrapper(
       'Request Approved',
-      `Your fund request for <strong>PoLine: ${p.poLineNumber || 'N/A'} ₦${(p.requestedAmount || 0).toLocaleString()}</strong> has been approved.`,
+      `Your fund request for  <strong>${p.duid} PoNo: ${p.poNumber}  Line: ${p.poLineNumber}</strong> has been approved:
+       <div style="margin-top: 16px; padding: 16px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+         <p style="margin:0;"><strong>Amount:</strong> ₦${(p.requestedAmount || 0).toLocaleString()}</p>
+          <p style="margin:8px 0 0 0;"><strong>PM:</strong> ${p.pm}</p>
+          <p style="margin:8px 0 0 0;"><strong>Description:</strong> ${p.itemDescription}</p>
+       </div>`,
     ),
   }),
 
