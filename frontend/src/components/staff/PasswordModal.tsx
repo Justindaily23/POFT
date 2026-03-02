@@ -1,10 +1,20 @@
 // src/pages/staff/components/PasswordModal.tsx
-import { CheckCircle2, Copy } from "lucide-react";
+import { CheckCircle2, Copy, Check } from "lucide-react";
+import { useState } from "react";
 
-export function PasswordModal({ password, onClose }: { password: string; onClose: () => void }) {
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(password);
-    // You could add a small "Copied!" toast here too
+interface PasswordModalProps {
+  staffId: string;
+  password: string;
+  onClose: () => void;
+}
+
+export function PasswordModal({ staffId, password, onClose }: PasswordModalProps) {
+  const [copiedField, setCopiedField] = useState<"id" | "pass" | null>(null);
+
+  const copyToClipboard = (text: string, field: "id" | "pass") => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 2000);
   };
 
   return (
@@ -15,19 +25,47 @@ export function PasswordModal({ password, onClose }: { password: string; onClose
             <CheckCircle2 size={24} />
           </div>
           <h3 className="text-lg font-bold text-slate-900">Credentials Generated</h3>
-          <p className="text-xs text-slate-500 mt-2">Copy this temporary password.</p>
-          <div className="mt-6 p-4 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-between">
-            <code className="text-xl font-black text-indigo-600 tracking-widest">{password}</code>
-            <button
-              onClick={copyToClipboard}
-              className="p-2 hover:bg-white rounded-lg transition-colors"
-            >
-              <Copy size={18} className="text-slate-400" />
-            </button>
+          <p className="text-xs text-slate-500 mt-2">Securely copy these account details.</p>
+
+          <div className="mt-6 space-y-4">
+            {/* STAFF ID ROW */}
+            <div className="text-left">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                Staff ID
+              </label>
+              <div className="mt-1 p-3 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-between">
+                <code className="text-sm font-bold text-slate-700 tracking-wider">{staffId}</code>
+                <button
+                  onClick={() => copyToClipboard(staffId, "id")}
+                  className={`p-2 rounded-lg transition-all ${copiedField === "id" ? "bg-green-50 text-green-600" : "hover:bg-white text-slate-400"}`}
+                >
+                  {copiedField === "id" ? <Check size={16} /> : <Copy size={16} />}
+                </button>
+              </div>
+            </div>
+
+            {/* PASSWORD ROW */}
+            <div className="text-left">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                Temporary Password
+              </label>
+              <div className="mt-1 p-3 bg-indigo-50/50 border-2 border-dashed border-indigo-100 rounded-2xl flex items-center justify-between">
+                <code className="text-lg font-black text-indigo-600 tracking-widest">
+                  {password}
+                </code>
+                <button
+                  onClick={() => copyToClipboard(password, "pass")}
+                  className={`p-2 rounded-lg transition-all ${copiedField === "pass" ? "bg-indigo-600 text-white shadow-md" : "hover:bg-white text-indigo-400"}`}
+                >
+                  {copiedField === "pass" ? <Check size={16} /> : <Copy size={16} />}
+                </button>
+              </div>
+            </div>
           </div>
+
           <button
             onClick={onClose}
-            className="mt-8 w-full py-3 bg-slate-900 text-white rounded-xl font-bold text-xs uppercase tracking-widest"
+            className="mt-8 w-full py-3 bg-slate-900 text-white rounded-xl font-bold text-xs uppercase tracking-widest shadow-lg active:scale-95 transition-transform"
           >
             Close & Continue
           </button>
