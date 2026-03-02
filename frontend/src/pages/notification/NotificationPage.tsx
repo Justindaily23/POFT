@@ -49,7 +49,7 @@ export default function NotificationPage() {
   if (isLoading) return <LoadingState />;
 
   return (
-    <div className="max-w-md mx-auto p-4 pb-28">
+    <div className="w-full max-w-2x1 mx-auto p-2 pb-28">
       {/* 🔔 ACTIVE BELL HEADER */}
       <header className="flex justify-between items-center py-4 mb-6 sticky top-0 bg-white/80 backdrop-blur-md z-10 border-b border-slate-100">
         <div className="flex items-center gap-3">
