@@ -72,6 +72,7 @@ export class UserService {
     return {
       user: { ...createdUser, tempPassword },
       staffProfile,
+      message: 'Staff account created successfully',
     };
   }
 

@@ -19,7 +19,7 @@ export default defineConfig({
   migrations: {
     // Point this to your seed file
     // seed: 'ts-node -r tsconfig-paths/register ./src/prisma/seed/login-credentials.seed.ts',
-    //seed: 'ts-node -r tsconfig-paths/register ./src/prisma/seed/seed-po-types.ts',
-    seed: 'ts-node -r tsconfig-paths/register ./src/prisma/seed/states.seed.ts',
+    seed: 'ts-node -r tsconfig-paths/register ./src/prisma/seed/seed-po-types.ts',
+    // seed: 'ts-node -r tsconfig-paths/register ./src/prisma/seed/states.seed.ts',
   },
 });

@@ -47,7 +47,7 @@ async function bootstrap() {
         description: 'Covers procurement of physical goods or materials.',
       },
       {
-        name: 'Transportation Decommissioning',
+        name: ' Decommission',
         description: 'Covers follow-up visits, inspections, or corrective actions.',
       },
       {

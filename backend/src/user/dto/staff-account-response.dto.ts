@@ -14,4 +14,5 @@ export class StaffAccountResponseDto {
     stateId: string;
     isActive: boolean;
   };
+  message?: string;
 }
