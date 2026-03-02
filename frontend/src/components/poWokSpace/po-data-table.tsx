@@ -175,7 +175,7 @@ export function PODataTable({ data, onSelectionChange, onEditClick }: PODataTabl
       },
       {
         id: "contractAmount",
-        header: "Contract Amt",
+        header: "Contract Amount",
         cell: ({ row }) => {
           const amount = Number(row.original.contractAmount ?? 0);
           const isSuperAdmin = user?.role === "SUPER_ADMIN";
@@ -188,7 +188,7 @@ export function PODataTable({ data, onSelectionChange, onEditClick }: PODataTabl
                 type="button"
                 disabled={!canEdit}
                 className={`text-[8px] font-bold px-2 py-1 rounded transition-all border 
-                  ${canEdit ? "border-blue-200 bg-blue-50 text-blue-950 hover:bg-blue-100" : "border-transparent text-slate-500 opacity-80"}`}
+                  ${canEdit ? "border-blue-200 bg-blue-50 text-blue-950 hover:bg-blue-100" : "border-transparent text-slate-900 opacity-80"}`}
                 onClick={() => canEdit && onEditClick(row.original)}
               >
                 {isSet ? formatCurrency(amount) : "AWAITING SETUP"}
@@ -196,10 +196,10 @@ export function PODataTable({ data, onSelectionChange, onEditClick }: PODataTabl
             </div>
           );
         },
-        size: 50,
+        size: 80,
       },
       {
-        accessorKey: "status",
+        accessorKey: "Invoice Status",
         header: ({ column }) => <SortableHeader column={column} title="Status" />,
         cell: ({ row }) => {
           const id = row.original.id;
@@ -208,7 +208,7 @@ export function PODataTable({ data, onSelectionChange, onEditClick }: PODataTabl
             return <span className="text-[10px] text-slate-400 italic">No Data</span>;
           return <StatusCell id={id} currentStatus={status} />;
         },
-        size: 50,
+        size: 70,
       },
     ],
     [user?.role, onEditClick],

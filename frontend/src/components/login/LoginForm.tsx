@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/auth/useAuth";
 import { FormInput } from "./FormInput";
 import { Logo } from "../utility/Logo";
 import type { AppAxiosError } from "@/types/api/api.types";
-
+import { Link } from "react-router-dom";
 export function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -43,9 +43,12 @@ export function LoginForm() {
           />
           Remember account
         </label>
-        <a href="/forgot-password" className="text-blue-500 hover:underline p-4">
+        <Link
+          to="/forgot-password"
+          className="text-blue-500 hover:underline p-4 text-xs font-bold uppercase tracking-tighter"
+        >
           Reset Password
-        </a>
+        </Link>
       </div>
 
       <button

@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { AxiosError } from "axios";
 import { toast } from "sonner";
 
@@ -20,7 +20,11 @@ const toTitleCase = (str: string) => {
 
 export const useAuth = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const setAuth = useAuthStore((state) => state.setAuth);
+
+  // 2. Identify the "intended destination" or default to "/"
+  const from = location.state?.from?.pathname || "/";
 
   return useMutation<LoginResponse, AxiosError<ApiError>, LoginRequest>({
     mutationFn: async (formData: LoginRequest) => {
@@ -50,7 +54,7 @@ export const useAuth = () => {
         description: `Signed in as ${cleanName}`, // Displays "Justin Faith"
       });
 
-      navigate("/", { replace: true });
+      navigate(from, { replace: true });
     },
     onError: (error) => {
       const rawMessage = error.response?.data?.message;

@@ -5,6 +5,7 @@ import { ProtectedRoute } from "@/routes/ProtectedRoute";
 import { authApi } from "./api/auth/auth.api";
 import { Toaster as SonnerToaster } from "sonner";
 import { Loader2 } from "lucide-react";
+import { useIdleTimeout } from "./hooks/auth/useIdleTimeout";
 
 // Pages & Layouts
 import Maintenance from "./pages/app/Maintenance";
@@ -25,6 +26,7 @@ import PmFundRequestPage from "./pages/fund-request/PmFundRequestPage";
 import { AdminPoAnalyticsPage } from "./pages/po-analytics/AdminPoAnalyticsPage";
 import PmPoAnalyticsPage from "./pages/po-analytics/PmPoAnalyticsPage";
 import PoImportPage from "./pages/purchase-order/PoImportPage";
+import { setLogoutHandler, setMaintenanceHandler } from "@/api/auth/axios";
 
 // Types
 import type { AuthUser, AxiosMaintenanceError } from "./types/api/api.types";
@@ -33,8 +35,21 @@ function App() {
   const { isAuthenticated, user, isInitialLoading, setAuth, clearAuth, finishLoading } =
     useAuthStore();
 
+  useIdleTimeout(isAuthenticated ? 30 : 0);
+
   // 🛡️ Explicitly typed boolean state
   const [isMaintenance, setIsMaintenance] = useState<boolean>(false);
+
+  useEffect(() => {
+    // When the API sees a 503, show the Maintenance page
+    setMaintenanceHandler(() => setIsMaintenance(true));
+
+    // When the API sees a 401 (refresh failed), wipe the store
+    setLogoutHandler(() => {
+      clearAuth();
+      tokenService.clearToken();
+    });
+  }, [clearAuth]);
 
   useEffect(() => {
     const loadUser = async () => {

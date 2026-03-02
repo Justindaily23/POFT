@@ -98,8 +98,15 @@ apiClient.interceptors.response.use(
         processQueue(finalError, null);
 
         tokenService.clearToken();
+        localStorage.clear(); // Wipe everything for security
         if (onLogoutCallback) onLogoutCallback();
 
+        if (onLogoutCallback) {
+          onLogoutCallback();
+        } else {
+          // Fallback if callback isn't set yet
+          window.location.href = "/login?reason=session_expired";
+        }
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
