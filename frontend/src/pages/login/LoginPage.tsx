@@ -11,7 +11,7 @@ export default function LoginPage() {
       This locks the Header and Footer to the top/bottom edges and 
       prevents the "Larger than screen" scrolling issue.
     */
-    <div className="flex flex-col h-screen bg-[radial-gradient(ellipse_at_top,var(--tw-gradient-stops))] from-slate-50 via-white to-slate-100 font-sans overflow-hidden">
+    <div className="flex flex-col h-dvh bg-[radial-gradient(ellipse_at_top,var(--tw-gradient-stops))] from-slate-50 via-white to-slate-100 font-sans overflow-hidden">
       <Header />
 
       {/* 
