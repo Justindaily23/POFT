@@ -277,16 +277,14 @@ export class FundRequestsService {
       // 💡 Create shortcuts for cleaner code
       const poLine = fundRequest.purchaseOrderLine;
       const po = poLine.purchaseOrder;
-
-      void this.notificationsService
-        .notify(
+      try {
+        await this.notificationsService.notify(
           fundRequest.requestedBy,
           isApproved ? NotificationType.FUND_REQUEST_APPROVED : NotificationType.FUND_REQUEST_REJECTED,
           isApproved
             ? {
                 type: NotificationType.FUND_REQUEST_APPROVED,
                 duid: po.duid,
-                // 🔥 Use ?? undefined to convert nulls from Prisma
                 poNumber: po.poNumber ?? undefined,
                 projectName: po.projectName ?? undefined,
                 projectCode: po.projectCode ?? undefined,
@@ -311,12 +309,12 @@ export class FundRequestsService {
                 poLineNumber: poLine.poLineNumber ?? undefined,
               },
           fundRequest.id,
-        )
-        .catch((err: unknown) => {
-          // Log background failures without interrupting the main user response
-          const message = err instanceof Error ? err.message : 'Unknown notification error';
-          logger.error(`[Notification Error] Request ${fundRequest.id}: ${message}`);
-        });
+        );
+      } catch (err: unknown) {
+        // Log background failures without interrupting the main user response
+        const message = err instanceof Error ? err.message : 'Unknown notification error';
+        logger.error(`[Notification Error] Request ${fundRequest.id}: ${message}`);
+      }
     }
 
     // 3. Map to DTO for the frontend

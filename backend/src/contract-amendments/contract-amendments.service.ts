@@ -86,7 +86,7 @@ export class ContractAmendmentsService {
       return { amendment, fundRequesters };
     });
 
-    // 7. Async Notification Dispatch
+    // 7. Background Notification Dispatch (Non-Blocking)
     if (result.fundRequesters.length > 0) {
       const notificationPayload: ContractAmendedPayload = {
         type: NotificationType.CONTRACT_AMENDED,
@@ -96,23 +96,23 @@ export class ContractAmendmentsService {
         reason,
       };
 
-      // ✅ TRULY BACKGROUNDED & SEQUENTIAL (Safe for Neon + Nigeria Latency)
+      // ✅ FIRE AND FORGET: Admin gets the response immediately
+      // The 'async' wrapper ensures errors don't crash the main process
       void (async () => {
-        for (const r of result.fundRequesters) {
-          try {
-            // We wait for Step 1 (Prisma Save) before starting the next one
-            await this.notificationsService.notify(
-              r.requestedBy,
-              NotificationType.CONTRACT_AMENDED,
-              notificationPayload,
-            );
-          } catch (err) {
-            logger.error(`[Background Notification] Failed for user ${r.requestedBy}: ${err}`);
-          }
+        try {
+          // Use allSettled so one failure doesn't stop the loop
+          await Promise.allSettled(
+            result.fundRequesters.map((r) =>
+              this.notificationsService.notify(r.requestedBy, NotificationType.CONTRACT_AMENDED, notificationPayload),
+            ),
+          );
+        } catch (err) {
+          logger.error(`[Background Notification Error]: ${err}`);
         }
       })();
     }
 
+    // 8. Return immediately - The Admin doesn't wait for notifications
     const finalPoLine = await this.prisma.purchaseOrderLine.findUnique({
       where: { id: purchaseOrderLineId },
     });
