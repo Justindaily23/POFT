@@ -11,23 +11,42 @@ export default defineConfig({
     VitePWA({
       // 2. Add the PWA configuration
       registerType: "autoUpdate",
-      includeAssets: ["favicon.ico", "apple-touch-icon.png", "mask-icon.svg"],
+      includeAssets: [
+        "favicon.ico",
+        "apple-icon-180.png",
+        "manifest-icon-192.maskable.png",
+        "manifest-icon-512.maskable.png",
+      ],
       manifest: {
         name: "Stecam Nigeria Limited",
         short_name: "Stecam",
-        description: "Process Operations and Finance Tracking",
+        description: "Stecam Operations and Finance Tracking",
         theme_color: "#ffffff",
         display: "standalone", // 3. This hides the URL bar on mobile
         icons: [
           {
-            src: "pwa-192x192.png",
+            src: "manifest-icon-192.maskable.png",
             sizes: "192x192",
             type: "image/png",
+            purpose: "any",
           },
           {
-            src: "pwa-512x512.png",
+            src: "manifest-icon-192.maskable.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "maskable",
+          },
+          {
+            src: "manifest-icon-512.maskable.png",
             sizes: "512x512",
             type: "image/png",
+            purpose: "any",
+          },
+          {
+            src: "manifest-icon-512.maskable.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable",
           },
         ],
       },
@@ -47,6 +66,20 @@ export default defineConfig({
       "/api": {
         target: "http://localhost:3000",
         changeOrigin: true,
+      },
+    },
+  },
+  // Inside defineConfig({...})
+  build: {
+    chunkSizeWarningLimit: 1000, // Optional: Raise limit to 1MB if you're okay with it
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // Splits node_modules into a separate vendor chunk
+          if (id.includes("node_modules")) {
+            return "vendor";
+          }
+        },
       },
     },
   },
