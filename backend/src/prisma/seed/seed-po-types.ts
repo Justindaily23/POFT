@@ -47,7 +47,7 @@ async function bootstrap() {
         description: 'Covers procurement of physical goods or materials.',
       },
       {
-        name: ' Decommission',
+        name: 'Decommission',
         description: 'Covers follow-up visits, inspections, or corrective actions.',
       },
       {
@@ -57,6 +57,10 @@ async function bootstrap() {
       {
         name: 'Survey',
         description: 'Covers site mapping',
+      },
+      {
+        name: 'Installation',
+        description: 'Covers site installation and setup activities.',
       },
     ];
 
