@@ -175,7 +175,8 @@ function renderDetails(n: Notification) {
       <>
         <Row label="Project" val={status.projectName || status.projectCode} />
         <Row label="PM" val={status.pm} />
-        <Row label="PO / Line" val={`${status.poNumber} (L-${status.poLineNumber})`} />
+        <Row label="PO" val={status.poNumber} />
+        <Row label="PO / Line" val={status.poLineNumber} />
         <Row label="Requested" val={`₦${status.requestedAmount?.toLocaleString()}`} />
 
         {n.type === NotificationType.FUND_REQUEST_APPROVED ? (
