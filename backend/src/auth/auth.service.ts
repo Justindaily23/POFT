@@ -89,7 +89,7 @@ export class AuthService {
 
     res.cookie('deviceId', resolvedDeviceId, {
       httpOnly: false,
-      secure: process.env.NODE_ENV === 'production',
+      secure: true,
       sameSite: 'none',
     });
 
@@ -116,7 +116,7 @@ export class AuthService {
 
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
-      sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'none',
+      sameSite: 'none',
       secure: true,
       expires: expiresAt,
     });
@@ -132,32 +132,44 @@ export class AuthService {
   }
 
   async refresh(refreshToken: string, deviceId: string, res: Response, userAgent: string, ip: string) {
+    // 1. Validate inputs early
     if (!refreshToken || !deviceId) {
-      logger.warn('Refresh token or device ID missing');
-      throw new UnauthorizedException();
+      logger.warn(`Refresh attempt blocked: Missing ${!refreshToken ? 'token' : 'deviceId'}`);
+      throw new UnauthorizedException('Authentication credentials missing');
     }
 
+    // 2. Strict Session Lookup
+    // Optimization: Find the session specifically for this device AND ensure it's not expired
     const session = await this.prisma.refreshSession.findFirst({
-      where: { deviceId, expiresAt: { gt: new Date() } },
+      where: {
+        deviceId,
+        expiresAt: { gt: new Date() },
+      },
       include: { user: true },
     });
 
-    if (!session) {
-      throw new UnauthorizedException('Session expired');
+    if (!session || !session.user) {
+      throw new UnauthorizedException('Session not found or expired');
     }
 
+    // 3. Prevent Reuse/Rotation Attacks
     const isValid = await bcrypt.compare(refreshToken, session.refreshToken);
     if (!isValid) {
-      await this.prisma.refreshSession.deleteMany({ where: { userId: session.userId } });
-      throw new UnauthorizedException('Please log in again');
+      // If the token is invalid, someone might be trying to steal the session.
+      // We wipe ALL sessions for this user on this device for safety.
+      await this.prisma.refreshSession.deleteMany({
+        where: { userId: session.userId, deviceId },
+      });
+      throw new UnauthorizedException('Security breach detected. Please log in again.');
     }
 
+    // 4. Generate New Credentials
     const newRefreshToken = randomBytes(64).toString('hex');
     const hashedNewRefreshToken = await bcrypt.hash(newRefreshToken, 12);
-
     const refreshTtl = this.getRefreshTokenExpiry('5d');
     const newExpiresAt = new Date(Date.now() + ms(refreshTtl));
 
+    // 5. Atomic Session Update
     await this.prisma.refreshSession.update({
       where: { id: session.id },
       data: {
@@ -168,6 +180,7 @@ export class AuthService {
       },
     });
 
+    // 6. Sign New Access Token
     const payload: JwtPayload = {
       sub: session.user.id,
       role: session.user.role,
@@ -180,11 +193,13 @@ export class AuthService {
       expiresIn: this.getAccessTokenExpiry(),
     });
 
+    // 7. CRITICAL: Cross-Domain Cookie Settings
+    // 'none' and 'secure' are MANDATORY for Vercel <-> Render communication
     res.cookie('refreshToken', newRefreshToken, {
       httpOnly: true,
-      secure: true,
+      secure: true, // Must be true for sameSite: 'none'
       sameSite: 'none',
-      path: '/',
+      path: '/', // Ensures cookie is available for all API routes
       expires: newExpiresAt,
     });
 

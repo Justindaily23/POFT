@@ -55,9 +55,16 @@ export class NotificationsService {
       });
 
       // 2. DISPATCH: Add to Bull Queue for background Email/SMS processing
-      await this.notificationQueue.add('send-notification', {
-        notificationId: notification.id,
-      });
+      this.notificationQueue
+        .add('send-notification', {
+          notificationId: notification.id,
+        })
+        .catch((err: unknown) => {
+          // IMPORTANT: Catch the error so it doesn't crash the main thread
+          logger.error(
+            `[BullMQ] Failed to queue notification ${notification.id}: ${err instanceof Error ? err.message : 'Unknown Redis error'}`,
+          );
+        });
 
       return notification;
     } catch (error: unknown) {

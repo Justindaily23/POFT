@@ -21,62 +21,80 @@ export function validateRows(rows: PoExcelRow[]): PoExcelRow[] {
     'requestedQuantity',
   ];
 
+  // Helper to safely stringify unknown values for error messages
+  const formatValue = (val: unknown): string => {
+    if (val === null || val === undefined) return 'null';
+
+    // 1. Handle Objects & Dates
+    if (typeof val === 'object') {
+      if (val instanceof Date) return val.toISOString();
+      try {
+        return JSON.stringify(val);
+      } catch {
+        return '[Complex Object]';
+      }
+    }
+
+    // 2. Handle Primitives explicitly to satisfy restrict-template-expressions
+    if (typeof val === 'string') return val;
+    if (typeof val === 'number' || typeof val === 'boolean') return val.toString();
+
+    // 3. Fallback for anything else (symbols, bigints, etc.)
+    return 'unknown value';
+  };
+
   rows.forEach((row, index) => {
-    const rowNo = index + 2; // +2 because Excel starts at 1 and has a header row
+    const rowNo = index + 2;
 
     requiredFields.forEach((field) => {
-      const value = row[field];
+      const value = row[field] as unknown;
 
-      // 1. Check for Missing/Empty
+      // 1. Missing/Empty Check
       if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) {
         errors.push(`Row ${rowNo}: missing required field "${field}"`);
         return;
       }
 
-      // 2. Numeric Validations (UnitPrice/Quantity must be > 0)
-      if (['unitPrice', 'requestedQuantity'].includes(field)) {
-        const num = Number(value);
-        if (isNaN(num) || num <= 0) {
-          // FIX: Convert value to string for the template literal
-          const displayValue = String(value);
-          errors.push(`Row ${rowNo}: "${field}" must be a positive number (got: ${displayValue})`);
+      // 2. Numeric Validation
+      if (['unitPrice', 'requestedQuantity', 'allowedOpenDays'].includes(field)) {
+        // Safe string conversion for numeric cleaning
+        const stringified = typeof value === 'string' ? value : formatValue(value);
+        const cleanValue = stringified.replace(/[^\d.-]/g, '');
+        const num = Number(cleanValue);
+
+        const isZeroAllowed = field === 'allowedOpenDays';
+        const isInvalid = isZeroAllowed ? isNaN(num) || num < 0 : isNaN(num) || num <= 0;
+
+        if (isInvalid) {
+          errors.push(`Row ${rowNo}: "${field}" must be a positive number (got: ${formatValue(value)})`);
+        } else {
+          (row[field] as number) = num;
         }
       }
 
-      // 3. PO Issued Date Validation (The "Handshake" with Excel Parser)
+      // 3. Date Validation (Nigeria-friendly UTC)
       if (field === 'poIssuedDate') {
-        let date;
+        let date: Date;
 
-        // 1. Parse the date safely based on format to prevent "one day off" errors in Nigeria
         if (typeof value === 'string' && value.includes('/')) {
-          // Handle Excel Style: 8/29/2025
           const [m, d, y] = value.split('/').map(Number);
           date = new Date(Date.UTC(y, m - 1, d));
         } else if (typeof value === 'string' && value.includes('-')) {
-          // Handle ISO Style: 2025-09-28
           const [y, m, d] = value.split('-').map(Number);
           date = new Date(Date.UTC(y, m - 1, d));
+        } else if (value instanceof Date) {
+          date = value;
         } else {
-          // Fallback for native Date objects or other strings
-          date = new Date(value);
+          // Safe conversion before passing to Date constructor
+          date = new Date(formatValue(value));
         }
 
-        // 2. Validation Checks
-        const isValidDate = !isNaN(date.getTime());
-
-        if (!isValidDate) {
-          const displayValue = String(value);
-          errors.push(`Row ${rowNo}: invalid date format for "poIssuedDate" (got: ${displayValue})`);
+        if (isNaN(date.getTime())) {
+          errors.push(`Row ${rowNo}: invalid date format for "poIssuedDate" (got: ${formatValue(value)})`);
         } else if (date > new Date()) {
-          // This correctly compares your parsed date against the current time in Nigeria
           errors.push(`Row ${rowNo}: "poIssuedDate" cannot be in the future`);
-        }
-      }
-
-      // 4. Allowed Open Days (Must be 0 or greater)
-      if (field === 'allowedOpenDays') {
-        if (isNaN(Number(value)) || Number(value) < 0) {
-          errors.push(`Row ${rowNo}: "allowedOpenDays" must be a non-negative number`);
+        } else {
+          row.poIssuedDate = date;
         }
       }
     });

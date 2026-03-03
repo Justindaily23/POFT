@@ -48,9 +48,10 @@ export const EmailTemplates: EmailTemplateRegistry = {
     subject: `New Fund Request: ${p.duid}`,
     html: emailWrapper(
       'New Fund Request Created',
-      `A new request for <strong>${p.duid} PoNo: ${p.poNumber} Line: ${p.poLineNumber}</strong> requires review:
+      `A new request for <strong>${p.duid} PoNo: ${p.poNumber}</strong> requires review:
        <div style="margin-top: 16px; padding: 16px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
          <p style="margin:0;"><strong>Amount:</strong> ₦${(p.requestedAmount || 0).toLocaleString()}</p>
+          <p style="margin:0;"><strong>Line:</strong>${p.poLineNumber}</p>
           <p style="margin:8px 0 0 0;"><strong>PM:</strong> ${p.pm}</p>
           <p style="margin:8px 0 0 0;"><strong>Description:</strong> ${p.itemDescription}</p>
          <p style="margin:8px 0 0 0;"><strong>Purpose:</strong> ${p.requestPurpose}</p>
@@ -62,9 +63,10 @@ export const EmailTemplates: EmailTemplateRegistry = {
     subject: `Fund Request Approved: ${p.poNumber || 'N/A'}`,
     html: emailWrapper(
       'Request Approved',
-      `Your fund request for  <strong>${p.duid} PoNo: ${p.poNumber}  Line: ${p.poLineNumber}</strong> has been approved:
+      `Your fund request for  <strong>${p.duid} PoNo: ${p.poNumber}</strong> has been approved:
        <div style="margin-top: 16px; padding: 16px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
          <p style="margin:0;"><strong>Amount:</strong> ₦${(p.requestedAmount || 0).toLocaleString()}</p>
+          <p style="margin:0;"><strong>Line:</strong>${p.poLineNumber}</p>
           <p style="margin:8px 0 0 0;"><strong>PM:</strong> ${p.pm}</p>
           <p style="margin:8px 0 0 0;"><strong>Description:</strong> ${p.itemDescription}</p>
        </div>`,
@@ -75,7 +77,7 @@ export const EmailTemplates: EmailTemplateRegistry = {
     subject: `Aging Warning: ${p.poNumber || 'PO Line'}`,
     html: emailWrapper(
       'Aging Warning',
-      `PO Line <strong>${p.poLineNumber}</strong> has reached <strong>${p.agingFlag}</strong> status.`,
+      `<strong>${p.duid}:</strong> PO Line <strong>${p.poLineNumber}</strong> has reached <strong>${p.agingFlag}</strong> status.`,
     ),
   }),
 
@@ -120,7 +122,7 @@ export const EmailTemplates: EmailTemplateRegistry = {
 
   // Explicitly mapping the remaining types to satisfy the Registry
   [NotificationType.FUND_REQUEST_REJECTED]: (p: FundRequestStatusPayload) => ({
-    subject: `Fund Request Rejected`,
+    subject: `Fund Request Rejected ${p.duid}`,
     html: emailWrapper(
       'Request Rejected',
       `Your request for Po: ${p.poNumber || 'N/A'} with PoLine: ${p.poLineNumber || 'N/A'} and amount ₦${(p.requestedAmount || 0).toLocaleString()} was rejected.`,

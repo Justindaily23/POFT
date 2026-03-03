@@ -49,6 +49,11 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error),
 );
 
+const refreshClient = axios.create({
+  baseURL: `${import.meta.env.VITE_API_BASE_URL}/api`,
+  withCredentials: true,
+});
+
 apiClient.interceptors.response.use(
   (response: AxiosResponse) => response,
   async (error: AxiosError<ApiErrorResponse>) => {
@@ -81,7 +86,7 @@ apiClient.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const { data } = await apiClient.post<{ accessToken: string }>(
+        const { data } = await refreshClient.post<{ accessToken: string }>(
           "/auth/refresh",
           {},
           { withCredentials: true },

@@ -88,27 +88,29 @@ export class ContractAmendmentsService {
 
     // 7. Async Notification Dispatch
     if (result.fundRequesters.length > 0) {
-      // ✅ ADD THE TYPE TAG AND CAST TO THE CORRECT INTERFACE
       const notificationPayload: ContractAmendedPayload = {
-        type: NotificationType.CONTRACT_AMENDED, // 👈 This resolves the TS2345 error
+        type: NotificationType.CONTRACT_AMENDED,
         poLineId: purchaseOrderLineId,
         newAmount: newContractAmount,
         oldAmount: new Decimal(result.amendment.oldAmount).toNumber(),
         reason,
       };
 
-      const notificationPromises = result.fundRequesters.map((r) =>
-        this.notificationsService.notify(
-          r.requestedBy,
-          NotificationType.CONTRACT_AMENDED,
-          notificationPayload, // Use 'as any' here to satisfy the generic notify method
-        ),
-      );
-
-      Promise.all(notificationPromises).catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : 'Unknown notification error';
-        logger.error(`Notification loop failed: ${message}`);
-      });
+      // ✅ TRULY BACKGROUNDED & SEQUENTIAL (Safe for Neon + Nigeria Latency)
+      void (async () => {
+        for (const r of result.fundRequesters) {
+          try {
+            // We wait for Step 1 (Prisma Save) before starting the next one
+            await this.notificationsService.notify(
+              r.requestedBy,
+              NotificationType.CONTRACT_AMENDED,
+              notificationPayload,
+            );
+          } catch (err) {
+            logger.error(`[Background Notification] Failed for user ${r.requestedBy}: ${err}`);
+          }
+        }
+      })();
     }
 
     const finalPoLine = await this.prisma.purchaseOrderLine.findUnique({

@@ -10,7 +10,7 @@ async function bootstrap() {
 
   app.enableCors({
     origin: ['http://localhost:5173', 'http://localhost:4173', 'https://stecam.vercel.app'],
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     credentials: true,
     maxAge: 3600,
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
