@@ -271,6 +271,11 @@ export class FundRequestsService {
       throw new InternalServerErrorException('Failed to process fund request transaction.');
     }
 
+    const freshRequest = await this.prisma.fundRequest.findUnique({
+      where: { id: fundRequest.id },
+      include: { purchaseOrderLine: { include: { purchaseOrder: true } } },
+    });
+
     if (fundRequest.status !== FundRequestStatus.PENDING) {
       const isApproved = fundRequest.status === FundRequestStatus.APPROVED;
 
