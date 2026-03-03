@@ -45,14 +45,30 @@ export function validateRows(rows: PoExcelRow[]): PoExcelRow[] {
 
       // 3. PO Issued Date Validation (The "Handshake" with Excel Parser)
       if (field === 'poIssuedDate') {
-        const date = new Date(value);
-        const isValidDate = date instanceof Date && !isNaN(date.getTime());
+        let date;
+
+        // 1. Parse the date safely based on format to prevent "one day off" errors in Nigeria
+        if (typeof value === 'string' && value.includes('/')) {
+          // Handle Excel Style: 8/29/2025
+          const [m, d, y] = value.split('/').map(Number);
+          date = new Date(Date.UTC(y, m - 1, d));
+        } else if (typeof value === 'string' && value.includes('-')) {
+          // Handle ISO Style: 2025-09-28
+          const [y, m, d] = value.split('-').map(Number);
+          date = new Date(Date.UTC(y, m - 1, d));
+        } else {
+          // Fallback for native Date objects or other strings
+          date = new Date(value);
+        }
+
+        // 2. Validation Checks
+        const isValidDate = !isNaN(date.getTime());
 
         if (!isValidDate) {
-          // FIX: Convert value to string for the template literal
           const displayValue = String(value);
           errors.push(`Row ${rowNo}: invalid date format for "poIssuedDate" (got: ${displayValue})`);
         } else if (date > new Date()) {
+          // This correctly compares your parsed date against the current time in Nigeria
           errors.push(`Row ${rowNo}: "poIssuedDate" cannot be in the future`);
         }
       }

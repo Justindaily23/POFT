@@ -136,7 +136,6 @@ export const EmailTemplates: EmailTemplateRegistry = {
        This is a confirmation that the password for your Stecam Ops account was changed on <strong>${new Date().toLocaleString()}</strong>.<br>
        If you did not perform this action, please contact the IT Administrator immediately.`,
       'Login to your account',
-      'https://stecam-ops.com',
     ),
   }),
 
