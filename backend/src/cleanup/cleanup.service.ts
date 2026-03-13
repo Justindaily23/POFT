@@ -7,7 +7,7 @@ import { logger } from 'src/common/logger/logger';
 export class CleanupService {
   constructor(private readonly prisma: PrismaService) {}
 
-  @Cron(CronExpression.EVERY_HOUR) // runs every hour
+  @Cron(CronExpression.EVERY_DAY_AT_2AM) // runs every day at 2 AM
   async handleExpiredSessions() {
     const deleted = await this.prisma.refreshSession.deleteMany({
       where: { expiresAt: { lt: new Date() } },

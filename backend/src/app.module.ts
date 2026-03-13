@@ -59,8 +59,8 @@ import { ContractAmendmentsModule } from './contract-amendments/contract-amendme
           port: config.get<number>('REDIS_PORT') || 6379,
           password: config.get('REDIS_PASSWORD'),
           db: config.get<number>('REDIS_DB') || 0,
-          tls: {}, // Keep this for Upstash (Bull will accept)
-          connectTimeout: 100_000,
+          tls: config.get('REDIS_USE_TLS') === 'true' ? { rejectUnauthorized: false } : undefined,
+          connectTimeout: 30_000,
           disconnectTimeout: 2000,
           keepAlive: 30_000,
           maxRetriesPerRequest: null,
@@ -73,7 +73,13 @@ import { ContractAmendmentsModule } from './contract-amendments/contract-amendme
       }),
     }),
 
-    BullModule.registerQueue({ name: 'notifications' }),
+    BullModule.registerQueue({
+      name: 'notifications',
+      limiter: {
+        max: 10, // Max 10 emails
+        duration: 1000, // Every 1 second (600 emails per minute)
+      },
+    }),
 
     CacheModule.registerAsync({
       isGlobal: true,

@@ -86,6 +86,7 @@ export type AllNotificationPayloads =
   | FullFundRequestPayload
   | FundRequestStatusPayload
   | PasswordChangedPayload
+  | PasswordResetPayload
   | { name: string; resetLink: string }
   | { duid: string; projectName: string; status: string; daysOpen: number };
 
