@@ -1,28 +1,17 @@
 import { Process, Processor } from '@nestjs/bull';
 import { Job } from 'bull';
 import { PrismaService } from '../prisma/prisma.service';
-import nodemailer, { Transporter } from 'nodemailer';
 import { logger } from 'src/common/logger/logger';
 import { EmailTemplates } from './templates/email-templates';
 import { NotificationMapping } from './types/notification-payload.interface';
+import { MailerService } from '@nestjs-modules/mailer';
 
 @Processor('notifications')
 export class NotificationsProcessor {
-  private transporter: Transporter;
-
-  constructor(private prisma: PrismaService) {
-    this.transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT),
-      secure: Number(process.env.SMTP_PORT) === 465,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-      pool: true,
-      maxConnections: 5,
-    });
-  }
+  constructor(
+    private prisma: PrismaService,
+    private readonly mailerService: MailerService,
+  ) {}
 
   /**
    * 2. TYPE-SAFE DISPATCHER
@@ -76,7 +65,7 @@ export class NotificationsProcessor {
 
     try {
       // 4. Send via Pooled SMTP Transporter
-      await this.transporter.sendMail({
+      await this.mailerService.sendMail({
         from: process.env.SMTP_FROM,
         to: notification.user.email,
         subject,
@@ -89,7 +78,7 @@ export class NotificationsProcessor {
         data: { sentAt: new Date() },
       });
 
-      logger.info(`Email [${notification.type}] successfully sent to ${notification.user.email}`);
+      logger.info(`Email [${notification.type}] sent to ${notification.user.email}`);
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown SMTP Error';
       logger.error(`Mail Error for ${notificationId}: ${errorMessage}`);

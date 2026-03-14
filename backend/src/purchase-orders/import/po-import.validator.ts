@@ -2,25 +2,6 @@ import { PoExcelRow } from './po-import.types';
 
 export function validateRows(rows: PoExcelRow[]): PoExcelRow[] {
   const errors: string[] = [];
-
-  const requiredFields: (keyof PoExcelRow)[] = [
-    'duid',
-    'projectName',
-    'poType',
-    'projectCode',
-    'prNumber',
-    'poNumber',
-    'poIssuedDate',
-    'pm',
-    'pmId',
-    'poLineNumber',
-    'allowedOpenDays',
-    'itemCode',
-    'itemDescription',
-    'unitPrice',
-    'requestedQuantity',
-  ];
-
   // Helper to safely stringify unknown values for error messages
   const formatValue = (val: unknown): string => {
     if (val === null || val === undefined) return 'null';
@@ -43,24 +24,45 @@ export function validateRows(rows: PoExcelRow[]): PoExcelRow[] {
     return 'unknown value';
   };
 
-  rows.forEach((row, index) => {
-    const rowNo = index + 2;
+  const requiredFields: (keyof PoExcelRow)[] = [
+    'duid',
+    'projectName',
+    'poType',
+    'projectCode',
+    'prNumber',
+    'poNumber',
+    'poIssuedDate',
+    'pm',
+    'pmId',
+    'poLineNumber',
+    'allowedOpenDays',
+    'itemCode',
+    'itemDescription',
+    'unitPrice',
+    'requestedQuantity',
+  ];
 
-    requiredFields.forEach((field) => {
-      const value = row[field] as unknown;
+  let rowNo = 2;
+  for (const row of rows) {
+    for (const field of requiredFields) {
+      const value = row[field];
 
-      // 1. Missing/Empty Check
+      // 1. Maintain your exact missing/empty check
       if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) {
         errors.push(`Row ${rowNo}: missing required field "${field}"`);
-        return;
+        continue;
       }
 
-      // 2. Numeric Validation
+      // 2. Numeric Validation (Preserving your cleaning logic)
       if (['unitPrice', 'requestedQuantity', 'allowedOpenDays'].includes(field)) {
-        // Safe string conversion for numeric cleaning
-        const stringified = typeof value === 'string' ? value : formatValue(value);
-        const cleanValue = stringified.replace(/[^\d.-]/g, '');
-        const num = Number(cleanValue);
+        let num: number;
+        if (typeof value === 'number') {
+          num = value;
+        } else {
+          // Clean the string just like your original code
+          const cleanValue = String(value).replace(/[^\d.-]/g, '');
+          num = Number(cleanValue);
+        }
 
         const isZeroAllowed = field === 'allowedOpenDays';
         const isInvalid = isZeroAllowed ? isNaN(num) || num < 0 : isNaN(num) || num <= 0;
@@ -68,27 +70,28 @@ export function validateRows(rows: PoExcelRow[]): PoExcelRow[] {
         if (isInvalid) {
           errors.push(`Row ${rowNo}: "${field}" must be a positive number (got: ${formatValue(value)})`);
         } else {
+          // Type-safe assignment without 'any'
           (row[field] as number) = num;
         }
       }
 
-      // 3. Date Validation (Nigeria-friendly UTC)
+      // 3. Date Validation (Preserving your specific UTC format)
       if (field === 'poIssuedDate') {
         let date: Date;
-
-        if (typeof value === 'string' && value.includes('/')) {
-          const [m, d, y] = value.split('/').map(Number);
-          date = new Date(Date.UTC(y, m - 1, d));
-        } else if (typeof value === 'string' && value.includes('-')) {
-          const [y, m, d] = value.split('-').map(Number);
-          date = new Date(Date.UTC(y, m - 1, d));
-        } else if (value instanceof Date) {
+        if (value instanceof Date) {
           date = value;
         } else {
-          // Safe conversion before passing to Date constructor
-          date = new Date(formatValue(value));
+          const strVal = String(value);
+          if (strVal.includes('/')) {
+            const [m, d, y] = strVal.split('/').map(Number);
+            date = new Date(Date.UTC(y, m - 1, d));
+          } else if (strVal.includes('-')) {
+            const [y, m, d] = strVal.split('-').map(Number);
+            date = new Date(Date.UTC(y, m - 1, d));
+          } else {
+            date = new Date(strVal);
+          }
         }
-
         if (isNaN(date.getTime())) {
           errors.push(`Row ${rowNo}: invalid date format for "poIssuedDate" (got: ${formatValue(value)})`);
         } else if (date > new Date()) {
@@ -97,9 +100,11 @@ export function validateRows(rows: PoExcelRow[]): PoExcelRow[] {
           row.poIssuedDate = date;
         }
       }
-    });
-  });
+    }
+    rowNo++;
+  }
 
+  // Your original error reporting logic remains untouched
   if (errors.length) {
     const firstTenErrors = errors.slice(0, 10);
     const suffix = errors.length > 10 ? `\n...and ${errors.length - 10} more errors.` : '';

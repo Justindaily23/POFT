@@ -152,6 +152,7 @@ model PurchaseOrder {
   updatedAt DateTime @updatedAt
 
   @@unique([duid, poNumber])
+  @@index([duid])
   @@index([poNumber])
   @@index([projectName])
   @@index([projectCode])
@@ -298,6 +299,9 @@ model FundRequest {
   @@index([purchaseOrderLineId])
   @@index([status])
   @@index([requestedBy])
+  @@index([status, createdAt(sort: Desc)])
+  @@index([requestedBy, createdAt(sort: Desc)])
+
 }
 
 model FundRequestHistory {

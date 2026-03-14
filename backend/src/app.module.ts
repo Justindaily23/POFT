@@ -38,15 +38,17 @@ import { ContractAmendmentsModule } from './contract-amendments/contract-amendme
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         transport: {
-          host: config.get('MAIL_HOST'),
-          port: config.get('MAIL_PORT'),
+          host: config.get('SMTP_HOST'),
+          port: config.get('SMTP_PORT'),
           auth: {
-            user: config.get('MAIL_USER'),
-            pass: config.get('MAIL_PASS'),
+            user: config.get('SMTP_USER'),
+            pass: config.get('SMTP_PASS'),
           },
         },
+        pool: true,
+        maxConnections: 5,
         defaults: {
-          from: '"Finance System" <noreply@fitflexnaija.ng>',
+          from: config.get('SMTP_FROM'),
         },
       }),
     }),
@@ -71,14 +73,6 @@ import { ContractAmendmentsModule } from './contract-amendments/contract-amendme
           guardInterval: 5000,
         },
       }),
-    }),
-
-    BullModule.registerQueue({
-      name: 'notifications',
-      limiter: {
-        max: 10, // Max 10 emails
-        duration: 1000, // Every 1 second (600 emails per minute)
-      },
     }),
 
     CacheModule.registerAsync({

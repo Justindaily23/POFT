@@ -58,47 +58,60 @@ export class FundRequestsService {
 
   /** PREFILL: Fetch PO Lines for PM form */
   async fetchFundRequestData(query: string): Promise<POLineSearchResponseDto[]> {
-    const pos = await this.prisma.purchaseOrder.findMany({
+    const cleanQuery = query.trim();
+    if (!cleanQuery) return [];
+
+    // 1. Search for POs matching the query in either duid or poNumber directly in the database to improve performance
+    const pos = await this.prisma.purchaseOrderLine.findMany({
       where: {
         OR: [
-          { duid: { contains: query, mode: 'insensitive' } },
-          { poNumber: { contains: query, mode: 'insensitive' } },
+          { purchaseOrder: { duid: { startsWith: cleanQuery, mode: 'insensitive' } } },
+          { purchaseOrder: { poNumber: { startsWith: cleanQuery } } },
         ],
       },
-      include: { poLines: true },
-      orderBy: { createdAt: 'desc' },
+      take: 200,
+      include: {
+        purchaseOrder: {
+          select: {
+            duid: true,
+            poNumber: true,
+            prNumber: true,
+            projectName: true,
+            projectCode: true,
+          },
+        },
+      },
+      orderBy: [{ purchaseOrder: { createdAt: 'desc' } }, { poLineNumber: 'asc' }],
     });
 
-    return pos.flatMap((po) =>
-      po.poLines.map((line) => ({
-        poLineId: line.id,
-        duid: po.duid,
-        poNumber: po.poNumber ?? null,
-        prNumber: po.prNumber ?? null,
-        poLineNumber: line.poLineNumber ?? null,
-        itemDescription: line.itemDescription ?? null,
-        projectName: po.projectName ?? null,
-        projectCode: po.projectCode ?? null,
-        itemCode: line.itemCode ?? null,
-        unitPrice: line.unitPrice?.toNumber() ?? null,
-        requestedQuantity: line.requestedQuantity ?? null,
-        poLineAmount: line.poLineAmount?.toNumber() ?? null,
-        poTypeId: line.poTypeId ?? null,
-        pm: line.pm ?? null,
-        pmId: line.pmId ?? null,
-        requestedAmount: 0,
-        poIssuedDate: line.poIssuedDate ?? null,
+    return pos.map((line) => ({
+      poLineId: line.id,
+      duid: line.purchaseOrder.duid,
+      poNumber: line.purchaseOrder.poNumber ?? null,
+      prNumber: line.purchaseOrder.prNumber ?? null,
+      poLineNumber: line.poLineNumber ?? null,
+      itemDescription: line.itemDescription ?? null,
+      projectName: line.purchaseOrder.projectName ?? null,
+      projectCode: line.purchaseOrder.projectCode ?? null,
+      itemCode: line.itemCode ?? null,
+      unitPrice: line.unitPrice?.toNumber() ?? null,
+      requestedQuantity: line.requestedQuantity ?? null,
+      poLineAmount: line.poLineAmount?.toNumber() ?? null,
+      poTypeId: line.poTypeId ?? null,
+      pm: line.pm ?? null,
+      pmId: line.pmId ?? null,
+      requestedAmount: 0,
+      poIssuedDate: line.poIssuedDate ?? null,
 
-        // Fix: Use optional chaining + fallback for ALL decimal fields
-        contractAmount: line.contractAmount?.toNumber() ?? null,
-        cumulativeApprovedAmount: line.totalApprovedAmount?.toNumber() ?? 0,
-        totalRequestedAmount: line.totalRequestedAmount?.toNumber() ?? 0, // Added ?
-        totalRejectedAmount: line.totalRejectedAmount?.toNumber() ?? 0, // Added ?
-        remainingBalance: line.remainingBalance?.toNumber() ?? 0,
+      // Fix: Use optional chaining + fallback for ALL decimal fields
+      contractAmount: line.contractAmount?.toNumber() ?? null,
+      cumulativeApprovedAmount: line.totalApprovedAmount?.toNumber() ?? 0,
+      totalRequestedAmount: line.totalRequestedAmount?.toNumber() ?? 0, // Added ?
+      totalRejectedAmount: line.totalRejectedAmount?.toNumber() ?? 0, // Added ?
+      remainingBalance: line.remainingBalance?.toNumber() ?? 0,
 
-        isNegotiationRequired: line.contractAmount === null,
-      })),
-    );
+      isNegotiationRequired: line.contractAmount === null,
+    }));
   }
 
   /** CREATE FUND REQUEST */
@@ -110,79 +123,83 @@ export class FundRequestsService {
     const isManual =
       !dto.poNumber || !dto.poLineNumber || dto.poNumber === 'TEMP-PO' || dto.poLineNumber === 'TEMP-LINE';
 
-    const fundRequest = await this.prisma.$transaction(async (tx) => {
-      // 1. Upsert PO
-      const po = await tx.purchaseOrder.upsert({
-        where: { duid_poNumber: { duid: dto.duid.trim(), poNumber: dto.poNumber?.trim() ?? 'TEMP-PO' } },
-        create: {
-          duid: dto.duid.trim(),
-          poNumber: dto.poNumber?.trim(),
-          projectName: dto.projectName,
-          projectCode: dto.projectCode,
-          prNumber: dto.prNumber,
-        },
-        update: {},
-      });
-
-      // 2. Upsert PO Line
-      const poLine = await tx.purchaseOrderLine.upsert({
-        where: {
-          purchaseOrderId_poLineNumber: {
-            purchaseOrderId: po.id,
-            poLineNumber: dto.poLineNumber?.trim() ?? 'TEMP-LINE',
+    const fundRequest = await this.prisma.$transaction(
+      async (tx) => {
+        // 1. Upsert PO
+        const po = await tx.purchaseOrder.upsert({
+          where: { duid_poNumber: { duid: dto.duid.trim(), poNumber: dto.poNumber?.trim() ?? 'TEMP-PO' } },
+          create: {
+            duid: dto.duid.trim(),
+            poNumber: dto.poNumber?.trim(),
+            projectName: dto.projectName,
+            projectCode: dto.projectCode,
+            prNumber: dto.prNumber,
           },
-        },
-        create: {
-          purchaseOrderId: po.id,
-          poLineNumber: dto.poLineNumber?.trim(),
-          pm: dto.pm,
-          pmId: dto.pmId,
-          itemCode: dto.itemCode,
-          itemDescription: dto.itemDescription,
-          unitPrice: dto.unitPrice,
-          requestedQuantity: dto.requestedQuantity,
-          poLineAmount: dto.poLineAmount,
-          poIssuedDate: dto.poIssuedDate,
-          contractAmount: null,
-          totalRequestedAmount: new Prisma.Decimal(0),
-          totalRejectedAmount: new Prisma.Decimal(0),
-          totalApprovedAmount: new Prisma.Decimal(0),
-          remainingBalance: new Prisma.Decimal(0),
-        },
-        update: {},
-      });
+          update: {},
+        });
 
-      // 3. Validate against contract
-      const aggregate = await tx.fundRequest.aggregate({
-        where: {
-          purchaseOrderLineId: poLine.id,
-          status: { in: [FundRequestStatus.PENDING, FundRequestStatus.APPROVED] },
-        },
-        _sum: { requestedAmount: true },
-      });
+        // 2. Upsert PO Line
+        const poLine = await tx.purchaseOrderLine.upsert({
+          where: {
+            purchaseOrderId_poLineNumber: {
+              purchaseOrderId: po.id,
+              poLineNumber: dto.poLineNumber?.trim() ?? 'TEMP-LINE',
+            },
+          },
+          create: {
+            purchaseOrderId: po.id,
+            poLineNumber: dto.poLineNumber?.trim(),
+            pm: dto.pm,
+            pmId: dto.pmId,
+            itemCode: dto.itemCode,
+            itemDescription: dto.itemDescription,
+            unitPrice: dto.unitPrice,
+            requestedQuantity: dto.requestedQuantity,
+            poLineAmount: dto.poLineAmount,
+            poIssuedDate: dto.poIssuedDate,
+            contractAmount: null,
+            totalRequestedAmount: new Prisma.Decimal(0),
+            totalRejectedAmount: new Prisma.Decimal(0),
+            totalApprovedAmount: new Prisma.Decimal(0),
+            remainingBalance: new Prisma.Decimal(0),
+          },
+          update: {},
+        });
 
-      const cumulativeRequested = (aggregate._sum.requestedAmount ?? new Prisma.Decimal(0)).plus(dto.requestedAmount);
+        // 3. Validate against contract
+        const aggregate = await tx.fundRequest.aggregate({
+          where: {
+            purchaseOrderLineId: poLine.id,
+            status: { in: [FundRequestStatus.PENDING, FundRequestStatus.APPROVED] },
+          },
+          _sum: { requestedAmount: true },
+        });
 
-      // ✅ Safe Error Message: Check if contractAmount exists before calling .toFixed()
-      if (poLine.contractAmount && cumulativeRequested.gt(poLine.contractAmount)) {
-        const maxStr = poLine.contractAmount ? poLine.contractAmount.toFixed(2) : '0.00';
-        throw new BadRequestException(
-          `Request exceeds contract. Total: ${cumulativeRequested.toFixed(2)}, Max: ${maxStr}`,
-        );
-      }
+        const currentTotal = aggregate._sum.requestedAmount ?? new Prisma.Decimal(0);
+        const newTotal = currentTotal.plus(dto.requestedAmount);
 
-      // 4. Create Fund Request
-      return tx.fundRequest.create({
-        data: {
-          purchaseOrderLineId: poLine.id,
-          requestedAmount: dto.requestedAmount,
-          requestPurpose: dto.requestPurpose,
-          requestedBy: userId,
-          source: isManual ? 'MANUAL' : 'STRUCTURED',
-        },
-        include: { purchaseOrderLine: { include: { purchaseOrder: true } } },
-      }) as Promise<FundRequestWithRelations>;
-    });
+        // ✅ Safe Error Message: Check if contractAmount exists before calling .toFixed()
+        if (poLine.contractAmount && newTotal.gt(poLine.contractAmount)) {
+          const maxStr = poLine.contractAmount ? poLine.contractAmount.toFixed(2) : '0.00';
+          throw new BadRequestException(`Request exceeds contract. Total: ${newTotal.toFixed(2)}, Max: ${maxStr}`);
+        }
+
+        // 4. Create Fund Request
+        return tx.fundRequest.create({
+          data: {
+            purchaseOrderLineId: poLine.id,
+            requestedAmount: dto.requestedAmount,
+            requestPurpose: dto.requestPurpose,
+            requestedBy: userId,
+            source: isManual ? 'MANUAL' : 'STRUCTURED',
+          },
+          include: { purchaseOrderLine: { include: { purchaseOrder: true } } },
+        }) as Promise<FundRequestWithRelations>;
+      },
+      {
+        isolationLevel: 'Serializable',
+      },
+    );
 
     // 5. Notify Admins
     const admins = await this.prisma.user.findMany({
@@ -466,21 +483,36 @@ export class FundRequestsService {
 
     // 1. Status Filter (Fixed for multi-status like "APPROVED,REJECTED")
     if (status && status !== 'ALL') {
-      const statuses = status.split(',') as FundRequestStatus[];
-      andConditions.push({ status: { in: statuses } });
+      const statuses = status.split(',').map((s) => s.trim()) as FundRequestStatus[];
+      if (statuses.length > 0) {
+        andConditions.push({ status: { in: statuses } });
+      }
     }
 
-    // 2. Date Range & 3. Global Search (Keep your existing logic here...)
+    // Date Range (Standard B-Tree index on createdAt handles this well)
     if (fromDate || toDate) {
-      /* ... existing date logic ... */
+      andConditions.push({
+        createdAt: {
+          gte: fromDate ? new Date(fromDate) : undefined,
+          lte: toDate ? new Date(toDate) : undefined,
+        },
+      });
     }
-    if (query && query.trim()) {
-      /* ... existing query logic ... */
+
+    // Search Logic (Optimized for the indexes we built)
+    if (query?.trim()) {
+      const cleanQuery = query.trim();
+      andConditions.push({
+        OR: [
+          { purchaseOrderLine: { purchaseOrder: { duid: { startsWith: cleanQuery, mode: 'insensitive' } } } },
+          { purchaseOrderLine: { purchaseOrder: { poNumber: { startsWith: cleanQuery } } } },
+        ],
+      });
     }
 
     // 4. Build Query Args
     const queryArgs: Prisma.FundRequestFindManyArgs = {
-      where: { AND: andConditions },
+      where: andConditions.length > 0 ? { AND: andConditions } : {},
       include: {
         purchaseOrderLine: { include: { purchaseOrder: true } },
       },
