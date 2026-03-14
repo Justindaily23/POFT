@@ -11,7 +11,7 @@ export interface ImportResult {
   poSucceeded: number;
   poFailed: number;
   linesProcessed: number;
-  status: 'SUCCESS' | 'PARTIAL' | 'FAILED';
+  status: 'SUCCESS' | 'PARTIAL' | 'FAILED' | 'PENDING';
   errors: string[];
 }
 
@@ -67,6 +67,12 @@ export class PoImportService {
       message: 'Import started. You can track progress in the History tab.',
       historyId: history.id,
     };
+  }
+
+  async getImportHistoryById(id: string) {
+    return this.prisma.poImportHistory.findUnique({
+      where: { id },
+    });
   }
 }
 
