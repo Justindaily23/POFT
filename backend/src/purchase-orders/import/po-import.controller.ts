@@ -13,7 +13,8 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
-import { PoImportService, ImportResult } from './po-import.service';
+import { PoImportService } from './po-import.service';
+import { ImportResult } from './po-import.types';
 import { PoImportHistory } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { extname } from 'path';

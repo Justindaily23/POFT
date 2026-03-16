@@ -1,11 +1,12 @@
 import { PrismaService } from '@/prisma/prisma.service';
-import { Process, Processor } from '@nestjs/bull';
+import { OnQueueFailed, OnQueueStalled, Process, Processor } from '@nestjs/bull';
 import { readExcel } from './excel.reader';
 import { validateRows } from './po-import.validator';
-import { PoExcelRow } from './po-import.types';
+import { ImportJobData, PoExcelRow } from './po-import.types';
 import * as fs from 'fs';
 import Decimal from 'decimal.js';
 import { Job } from 'bull';
+import { logger } from '@/common/logger/logger';
 
 @Processor('po-imports')
 export class PoImportProcessor {
@@ -25,7 +26,7 @@ export class PoImportProcessor {
       const grouped = this.groupRows(validRows);
 
       const poTypes = await this.prisma.poType.findMany();
-      const poTypeMap = new Map(poTypes.map((t) => [t.code.toUpperCase(), t.id]));
+      const poTypeMap = new Map(poTypes.map((t) => [t.code, t.id]));
 
       for (const [duid, poMap] of grouped.entries()) {
         for (const [poNumber, lines] of poMap.entries()) {
@@ -128,6 +129,35 @@ export class PoImportProcessor {
     } finally {
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
+  }
+
+  @OnQueueFailed()
+  async handleJobFailure(job: Job<ImportJobData>, error: Error) {
+    const { historyId } = job.data;
+
+    logger.error(`Job ${job.id} failed: ${error.message}`);
+
+    await this.prisma.poImportHistory.update({
+      where: { id: historyId },
+      data: {
+        status: 'FAILED',
+        errors: [`Queue Error: ${error.message}`],
+      },
+    });
+  }
+
+  @OnQueueStalled()
+  async handleJobStalled(job: Job<ImportJobData>) {
+    const { historyId } = job.data;
+
+    logger.warn(`Job ${job.id} stalled! Marking history ${historyId} as FAILED.`);
+    await this.prisma.poImportHistory.update({
+      where: { id: historyId },
+      data: {
+        status: 'FAILED',
+        errors: ['Job stalled (server restart or timeout)'],
+      },
+    });
   }
 
   private groupRows(rows: PoExcelRow[]) {

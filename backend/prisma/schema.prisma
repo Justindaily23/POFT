@@ -260,6 +260,7 @@ model PoImportHistory {
 
   @@index([status])
   @@index([createdAt])
+  @@index([fileHash])
 }
 
 // ============ FUND REQUESTS ============
