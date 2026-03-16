@@ -81,7 +81,19 @@ describe('PO Excel Import (E2E)', () => {
       .attach('file', excelBuffer, `import_${uniqueRef}.xlsx`);
 
     expect(res.status).toBe(201);
-    expect(res.body.status).toBe('SUCCESS');
+    expect(res.body.historyId).toBeDefined();
+    const historyId = res.body.historyId;
+
+    // 2. POLLING: Wait for the worker to finish (max 5 seconds)
+    let status = 'PENDING';
+    for (let i = 0; i < 10; i++) {
+      const history = await prisma.poImportHistory.findUnique({ where: { id: historyId } });
+      status = history?.status || 'PENDING';
+
+      if (status === 'SUCCESS' || status === 'FAILED') break;
+      await new Promise((resolve) => setTimeout(resolve, 500)); // Wait 500ms
+    }
+    expect(status).toBe('SUCCESS');
 
     // ✅ Match schema: Change 'lines' to 'poLines'
     const po = await prisma.purchaseOrder.findFirst({
@@ -92,5 +104,5 @@ describe('PO Excel Import (E2E)', () => {
     expect(po).toBeDefined();
     // ✅ Access via poLines array
     expect(po?.poLines[0].itemCode).toBe('ITEM-001');
-  });
+  }, 10000);
 });

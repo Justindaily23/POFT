@@ -22,6 +22,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-yet';
 import { ContractAmendmentsModule } from './contract-amendments/contract-amendments.module';
+import { RedisClientOptions } from 'redis';
 
 @Module({
   imports: [
@@ -88,13 +89,12 @@ import { ContractAmendmentsModule } from './contract-amendments/contract-amendme
         const password = config.get<string>('REDIS_PASSWORD');
         const useTls = config.get('REDIS_USE_TLS') === 'true'; // for Render / Upstash
 
-        const socket = {
+        const socket: RedisClientOptions['socket'] = {
           host,
           port,
-          tls: useTls ? true : false, // ⚡ boolean only
-          reconnectStrategy: (retries: number) => Math.min(retries * 50, 500),
-          connectTimeout: 10000,
-        };
+          reconnectStrategy: (retries) => Math.min(retries * 50, 500),
+          ...(useTls ? { tls: { rejectUnauthorized: false } } : { tls: false as const }),
+        } as RedisClientOptions['socket'];
 
         return {
           store: await redisStore({
@@ -105,6 +105,7 @@ import { ContractAmendmentsModule } from './contract-amendments/contract-amendme
         };
       },
     }),
+
     ContractAmendmentsModule,
     FundRequestsModule,
     NotificationsModule,
