@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MaintenanceGuard } from './common/guards/maintenance.guard';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, HttpAdapterHost } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -23,6 +23,7 @@ import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-yet';
 import { ContractAmendmentsModule } from './contract-amendments/contract-amendments.module';
 import { RedisClientOptions } from 'redis';
+import { PrismaClientExceptionFilter } from './common/filters/prisma-exception.filter'; // Adjust path
 
 @Module({
   imports: [
@@ -125,6 +126,13 @@ import { RedisClientOptions } from 'redis';
     {
       provide: APP_GUARD,
       useClass: MaintenanceGuard,
+    },
+    {
+      provide: APP_FILTER,
+      useFactory: ({ httpAdapter }: HttpAdapterHost) => {
+        return new PrismaClientExceptionFilter(httpAdapter);
+      },
+      inject: [HttpAdapterHost],
     },
   ],
 })

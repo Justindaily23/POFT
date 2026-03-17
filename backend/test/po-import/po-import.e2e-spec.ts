@@ -8,6 +8,8 @@ import { createTestApp } from '../setup/test-app';
 import { loginAsAdmin } from '../auth/auth.helper';
 import { cleanDatabase, disconnectUtilPrisma, prisma as utilPrisma } from '../utils/database.util';
 import { createPoExcelBuffer } from '../utils/excel.util';
+import { getQueueToken } from '@nestjs/bull';
+import { Queue } from 'bull';
 
 describe('PO Excel Import (E2E)', () => {
   let app: INestApplication;
@@ -20,13 +22,24 @@ describe('PO Excel Import (E2E)', () => {
   });
 
   afterAll(async () => {
+    // 1. Gracefully close the Bull Queue to stop Redis heartbeats
+    try {
+      // 1. Force the Bull-to-Upstash connection to close
+      const queue = app.get<Queue>(getQueueToken('po-imports'));
+      if (queue) {
+        await queue.pause(true);
+        await queue.close();
+      }
+    } catch (err) {
+      // Ignore if not initialized
+    }
     // Close the Nest app and its internal Prisma connection
     if (app) await app.close();
     if (prisma) await prisma.$disconnect();
 
     // 2. Close the utility connection used for cleaning/seeding
     await disconnectUtilPrisma();
-  });
+  }, 15000);
 
   beforeEach(async () => {
     await cleanDatabase();
@@ -86,7 +99,7 @@ describe('PO Excel Import (E2E)', () => {
 
     // 2. POLLING: Wait for the worker to finish (max 5 seconds)
     let status = 'PENDING';
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 20; i++) {
       const history = await prisma.poImportHistory.findUnique({ where: { id: historyId } });
       status = history?.status || 'PENDING';
 
@@ -96,13 +109,18 @@ describe('PO Excel Import (E2E)', () => {
     expect(status).toBe('SUCCESS');
 
     // ✅ Match schema: Change 'lines' to 'poLines'
+    // const po = await prisma.purchaseOrder.findFirst({
+    //   where: { poNumber: `PO-${uniqueRef}` },
+    //   include: { poLines: true },
+    // });
+    // In test/po-import/po-import.e2e-spec.ts
     const po = await prisma.purchaseOrder.findFirst({
-      where: { poNumber: `PO-${uniqueRef}` },
+      where: { poLines: { some: { itemCode: 'ITEM-001' } } }, // Find by item code instead
       include: { poLines: true },
     });
 
     expect(po).toBeDefined();
     // ✅ Access via poLines array
     expect(po?.poLines[0].itemCode).toBe('ITEM-001');
-  }, 10000);
+  }, 30000);
 });

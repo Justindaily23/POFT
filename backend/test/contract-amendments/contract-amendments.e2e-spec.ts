@@ -73,8 +73,16 @@ describe('Contract Amendments E2E', () => {
       .send(payload);
 
     expect(res.status).toBe(201);
-    expect(Number(res.body.updatedPoLine.contractAmount)).toBe(15000);
-    expect(Number(res.body.updatedPoLine.remainingBalance)).toBe(15000);
+
+    // Ensure updatedPoLine exists before checking properties
+    expect(res.body.updatedPoLine).toBeDefined();
+
+    // Convert Prisma Decimal strings safely to numbers
+    const contractAmount = parseFloat(res.body.updatedPoLine.contractAmount);
+    const remainingBalance = parseFloat(res.body.updatedPoLine.remainingBalance);
+
+    expect(contractAmount).toBe(15000);
+    expect(remainingBalance).toBe(15000);
     expect(res.body.amendment.reason).toBe(payload.reason);
 
     // Verify background notification tick

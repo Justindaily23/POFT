@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateContractAmendmentDto } from './dto/create-contract-amendment.dto';
@@ -51,7 +51,7 @@ export class ContractAmendmentsService {
 
         const remainingBalance = decimalNewAmount.minus(totalApproved);
 
-        const updatedPoLine = await tx.purchaseOrderLine.updateMany({
+        const updatedPoLine = await tx.purchaseOrderLine.update({
           where: {
             id: purchaseOrderLineId,
             version: poLine.version,
@@ -62,11 +62,6 @@ export class ContractAmendmentsService {
             version: { increment: 1 },
           },
         });
-
-        if (updatedPoLine.count === 0) {
-          logger.warn(`Conflict: PO Line ${purchaseOrderLineId} updated by another user.`);
-          throw new ConflictException('This record was modified by another user. Please refresh and try again.');
-        }
 
         const amendment = await tx.contractAmendment.create({
           data: {
