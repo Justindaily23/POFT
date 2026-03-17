@@ -13,8 +13,10 @@ export class PoImportService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    await this.importQueue.clean(0, 'failed');
-    await this.importQueue.clean(0, 'wait');
+    if (this.importQueue && typeof this.importQueue.clean === 'function') {
+      await this.importQueue.clean(0, 'failed');
+      await this.importQueue.clean(0, 'wait');
+    }
   }
 
   async importFromExcel(file: Express.Multer.File, userId?: string) {
