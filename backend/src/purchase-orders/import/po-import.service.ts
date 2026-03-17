@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { createHash } from 'crypto';
 import { InjectQueue } from '@nestjs/bull';
@@ -6,11 +6,16 @@ import { Queue } from 'bull';
 import * as fs from 'fs';
 
 @Injectable()
-export class PoImportService {
+export class PoImportService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     @InjectQueue('po-imports') private readonly importQueue: Queue, // Inject your queue
   ) {}
+
+  async onModuleInit() {
+    await this.importQueue.clean(0, 'failed');
+    await this.importQueue.clean(0, 'wait');
+  }
 
   async importFromExcel(file: Express.Multer.File, userId?: string) {
     // 1. Hash the file

@@ -30,7 +30,7 @@ export async function createTestApp(): Promise<INestApplication> {
           add: jest.fn().mockImplementation(async (name: string, data: any) => {
             if (data?.historyId) {
               // 1. Mark the import as SUCCESS so the polling loop stops
-              await prisma.poImportHistory.update({
+              await prisma.poImportHistory.updateMany({
                 where: { id: data.historyId },
                 data: { status: 'SUCCESS', poLineCount: 1 },
               });
@@ -57,6 +57,7 @@ export async function createTestApp(): Promise<INestApplication> {
             }
             return { id: 'mock-job-id' };
           }),
+          clean: jest.fn().mockResolvedValue([]),
           on: jest.fn(),
           process: jest.fn(),
         }) as any, // 👈 Double-cast 'as any' here to kill the 'never' error

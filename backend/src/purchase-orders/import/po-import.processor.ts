@@ -109,7 +109,8 @@ export class PoImportProcessor {
       }
 
       // 4. Update History (Success/Partial/Failed)
-      await this.prisma.poImportHistory.update({
+      await this.prisma.poImportHistory.updateMany({
+        // Use updateMany here
         where: { id: historyId },
         data: {
           status: poFailed === 0 ? 'SUCCESS' : poSucceeded > 0 ? 'PARTIAL' : 'FAILED',
@@ -120,9 +121,9 @@ export class PoImportProcessor {
         },
       });
     } catch (globalErr: unknown) {
-      // Change 'any' to 'unknown'
       const message = globalErr instanceof Error ? globalErr.message : 'Unknown global error';
-      await this.prisma.poImportHistory.update({
+      await this.prisma.poImportHistory.updateMany({
+        // And use updateMany here
         where: { id: historyId },
         data: { status: 'FAILED', errors: [message] },
       });
@@ -134,10 +135,10 @@ export class PoImportProcessor {
   @OnQueueFailed()
   async handleJobFailure(job: Job<ImportJobData>, error: Error) {
     const { historyId } = job.data;
-
     logger.error(`Job ${job.id} failed: ${error.message}`);
 
-    await this.prisma.poImportHistory.update({
+    await this.prisma.poImportHistory.updateMany({
+      // <-- Change to updateMany
       where: { id: historyId },
       data: {
         status: 'FAILED',
@@ -149,9 +150,10 @@ export class PoImportProcessor {
   @OnQueueStalled()
   async handleJobStalled(job: Job<ImportJobData>) {
     const { historyId } = job.data;
+    logger.warn(`Job ${job.id} stalled!`);
 
-    logger.warn(`Job ${job.id} stalled! Marking history ${historyId} as FAILED.`);
-    await this.prisma.poImportHistory.update({
+    await this.prisma.poImportHistory.updateMany({
+      // <-- Change to updateMany
       where: { id: historyId },
       data: {
         status: 'FAILED',
