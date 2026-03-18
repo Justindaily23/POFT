@@ -32,7 +32,7 @@ export async function createTestApp(): Promise<INestApplication> {
               // 1. Mark the import as SUCCESS so the polling loop stops
               await prisma.poImportHistory.updateMany({
                 where: { id: data.historyId },
-                data: { status: 'SUCCESS', poLineCount: 1 },
+                data: { status: 'SUCCESS', poCount: 1, poLineCount: 1 },
               });
 
               // 2. MANUALLY SEED the data the test is looking for

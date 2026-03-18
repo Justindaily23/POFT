@@ -128,7 +128,7 @@ describe('PO Analytics & PM Dashboard E2E', () => {
     expect(notifySpy).toHaveBeenCalledWith(
       pmUserId,
       NotificationType.PO_AGING_ALERT,
-      expect.objectContaining({ status: 'RED', duid: 'D-001' }),
+      expect.objectContaining({ agingFlag: 'RED', duid: 'D-001' }),
     );
   });
 });

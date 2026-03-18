@@ -75,7 +75,7 @@ describe('PO Excel Import (E2E)', () => {
       PO_TYPE: 'HARDWARE',
       PR_NUMBER: 'PR-123',
       PO_NUMBER: `PO-${uniqueRef}`,
-      PO_ISSUED_DATE: new Date(), // ✅ Pass actual Date object for cellDates: true
+      PO_ISSUED_DATE: new Date(),
       PM: 'John Doe',
       PM_ID: 'PM-001',
       ALLOWED_OPEN_DAYS: 30,
@@ -93,34 +93,38 @@ describe('PO Excel Import (E2E)', () => {
       .set('Authorization', `Bearer ${accessToken}`)
       .attach('file', excelBuffer, `import_${uniqueRef}.xlsx`);
 
+    // 1. Check Activity 1: The "Started" response
     expect(res.status).toBe(201);
     expect(res.body.historyId).toBeDefined();
+    expect(res.body.status).toBe('PENDING');
+    expect(res.body.poSucceeded).toBe(0);
+
     const historyId = res.body.historyId;
 
-    // 2. POLLING: Wait for the worker to finish (max 5 seconds)
+    // 2. POLLING: Wait for the worker to finish Activity 2 (max 10 seconds)
     let status = 'PENDING';
+    let finalHistory = null;
+
     for (let i = 0; i < 20; i++) {
-      const history = await prisma.poImportHistory.findUnique({ where: { id: historyId } });
-      status = history?.status || 'PENDING';
+      finalHistory = await prisma.poImportHistory.findUnique({ where: { id: historyId } });
+      status = finalHistory?.status || 'PENDING';
 
       if (status === 'SUCCESS' || status === 'FAILED') break;
-      await new Promise((resolve) => setTimeout(resolve, 500)); // Wait 500ms
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
-    expect(status).toBe('SUCCESS');
 
-    // ✅ Match schema: Change 'lines' to 'poLines'
-    // const po = await prisma.purchaseOrder.findFirst({
-    //   where: { poNumber: `PO-${uniqueRef}` },
-    //   include: { poLines: true },
-    // });
-    // In test/po-import/po-import.e2e-spec.ts
+    // 3. Verify Activity 2: Database shows Success and real numbers
+    expect(status).toBe('SUCCESS');
+    expect(finalHistory?.poCount).toBe(1);
+    expect(finalHistory?.poLineCount).toBe(1);
+
+    // 4. Verify Data Integrity: Check that the PO was actually created in the DB
     const po = await prisma.purchaseOrder.findFirst({
-      where: { poLines: { some: { itemCode: 'ITEM-001' } } }, // Find by item code instead
+      where: { poLines: { some: { itemCode: 'ITEM-001' } } },
       include: { poLines: true },
     });
 
     expect(po).toBeDefined();
-    // ✅ Access via poLines array
     expect(po?.poLines[0].itemCode).toBe('ITEM-001');
   }, 30000);
 });
