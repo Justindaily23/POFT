@@ -1,23 +1,5 @@
 import apiClient from "../auth/axios";
 import type { Notification } from "../../types/notification/notification.types";
-//import { tokenService } from "@/api/auth/tokenService"; // wherever you store your JWT
-
-// // Axios instance with backend base URL and auth
-// const api = axios.create({
-//   baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api",
-//   headers: {
-//     "Content-Type": "application/json",
-//   },
-// });
-
-// // Interceptor to attach JWT automatically
-// api.interceptors.request.use((config) => {
-//   const token = tokenService.getToken();
-//   if (token && config.headers) {
-//     config.headers.Authorization = `Bearer ${token}`;
-//   }
-//   return config;
-// });
 
 export const notificationApi = {
   getNotifications: async (): Promise<Notification[]> => {

@@ -27,7 +27,7 @@ export default function PoImportPage() {
   const formattedResult: ImportResult | null = data
     ? {
         ...data,
-        status: data.status as "SUCCESS" | "PARTIAL" | "FAILED",
+        status: data.status as "SUCCESS" | "PARTIAL" | "FAILED" | "PENDING",
         errors: data.errors ?? [],
       }
     : null;
@@ -41,7 +41,7 @@ export default function PoImportPage() {
             <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
               Purchase Order Import
             </h1>
-            <p className="text-slate-500">Sync Excel templates with your PO database.</p>
+            <p className="text-slate-600">Sync Excel templates with your PO database.</p>
           </header>
 
           <div className="border-2 border-dashed border-slate-200 rounded-3xl p-16 flex flex-col items-center justify-center bg-slate-50/50 hover:bg-white hover:border-blue-400 transition-all">
@@ -59,9 +59,9 @@ export default function PoImportPage() {
 
             <label htmlFor="file-upload" className="cursor-pointer text-center">
               <span className="text-blue-600 font-bold text-lg hover:underline">
-                Click to upload template
+                Click to upload Reconcialiation Template
               </span>
-              <p className="text-slate-400 text-sm mt-1">Excel files only (Max 10MB)</p>
+              <p className="text-slate-700 text-sm mt-1">Excel files only (Max 10MB)</p>
             </label>
 
             {file && (
@@ -119,8 +119,15 @@ export default function PoImportPage() {
   );
 }
 
+// Inside PoImportPage.tsx
 function StatusIcon({ status }: { status: string }) {
+  if (status === "PENDING") {
+    // This adds a spinning blue loader while the background worker is busy
+    return <Loader2 className="size-4 text-blue-500 animate-spin" />;
+  }
   if (status === "SUCCESS") return <CheckCircle2 className="size-4 text-emerald-500" />;
   if (status === "FAILED") return <XCircle className="size-4 text-red-500" />;
+
+  // This catches "PARTIAL" or any other unknown status
   return <AlertTriangle className="size-4 text-amber-500" />;
 }

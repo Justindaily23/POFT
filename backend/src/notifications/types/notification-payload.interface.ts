@@ -19,8 +19,9 @@ export interface AccountCreatedPayload {
 }
 
 export interface PoAgingAlertPayload {
-  type: typeof NotificationType.PO_AGING_WARNING;
+  type: typeof NotificationType.PO_AGING_WARNING | typeof NotificationType.PO_AGING_ALERT;
   duid: string;
+  pm: string;
   projectName: string;
   poNumber: string;
   poLineNumber: string;

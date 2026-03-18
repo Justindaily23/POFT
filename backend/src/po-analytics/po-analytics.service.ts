@@ -256,10 +256,15 @@ export class PoAnalyticsService {
 
               if (profile?.userId) {
                 await this.notificationsService.notify(profile.userId, NotificationType.PO_AGING_ALERT, {
+                  type: NotificationType.PO_AGING_ALERT,
                   duid: line.purchaseOrder?.duid || 'N/A',
                   projectName: line.purchaseOrder?.projectName || 'N/A',
-                  status: PoAgingFlag.RED,
+                  poNumber: line.purchaseOrder.poNumber || 'N/A',
+                  poLineNumber: line.poLineNumber || 'N/A',
+                  agingFlag: PoAgingFlag.RED,
                   daysOpen: evalResult.daysOpen,
+                  allowedOpenDays: evalResult.allowedOpenDays || 0,
+                  pm: line.pm || 'N/A',
                 });
 
                 await this.markAgingNotified(line.id, PoAgingFlag.RED);

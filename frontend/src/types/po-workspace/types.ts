@@ -47,18 +47,6 @@ export interface POWorkspaceResponse {
   nextCursor: string | null;
 }
 
-// src/lib/po-workspace/types.ts
-
-export interface ImportResult {
-  historyId: string; // Added to match service
-  duidCount: number;
-  poSucceeded: number;
-  poFailed: number;
-  linesProcessed: number; // FIX: Replace created/updated with this
-  status: "SUCCESS" | "PARTIAL" | "FAILED";
-  errors: string[];
-}
-
 // lib/po-workspace/types.ts
 export interface PoType {
   id: string;
@@ -88,7 +76,7 @@ export interface PoImportHistoryItem {
   duidCount: number;
   poCount: number;
   poLineCount: number;
-  status: "SUCCESS" | "PARTIAL" | "FAILED" | string;
+  status: "SUCCESS" | "PARTIAL" | "FAILED" | "PENDING" | string;
   errors: string[] | null;
   createdBy: string | null;
   // Using string | Date allows it to be a JSON string from the API
@@ -102,6 +90,6 @@ export interface ImportResult {
   poSucceeded: number;
   poFailed: number;
   linesProcessed: number;
-  status: "SUCCESS" | "PARTIAL" | "FAILED";
+  status: "SUCCESS" | "PARTIAL" | "FAILED" | "PENDING";
   errors: string[];
 }

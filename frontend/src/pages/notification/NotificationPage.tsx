@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
-// 🔥 Value and Type imports separated for 'erasableSyntaxOnly' compliance
 import { NotificationType } from "../../types/notification/notification.types";
 import type {
   Notification,
@@ -63,7 +62,7 @@ export default function NotificationPage() {
           </div>
           <div>
             <h1 className="text-xl font-black text-slate-900 tracking-tight">Inbox</h1>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+            <p className="text-[10px] font-bold text-slate-700 uppercase tracking-widest">
               {unreadCount} Unread Alerts
             </p>
           </div>
@@ -136,7 +135,7 @@ function renderSummary(n: Notification) {
   }
   if (n.type === NotificationType.PO_AGING_ALERT || n.type === NotificationType.PO_AGING_WARNING) {
     const payload = p as PoAgingAlertPayload;
-    return `SLA Alert: ${payload.projectName || payload.duid}`;
+    return `SLA Alert: ${payload.duid || payload.projectName}`;
   }
   return "System update regarding your active files.";
 }
@@ -154,7 +153,7 @@ function renderDetails(n: Notification) {
     isRed?: boolean;
   }) => (
     <div className="flex flex-col gap-0.5">
-      <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
+      <span className="text-[8px] font-black text-slate-700 uppercase tracking-widest">
         {label}
       </span>
       <span
