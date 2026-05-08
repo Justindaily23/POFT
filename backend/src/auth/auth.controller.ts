@@ -47,6 +47,7 @@ export class AuthController {
       role: req.user.role,
       email: req.user.email,
       name: req.user.name,
+      tokenVersion: req.user.tokenVersion,
       mustChangePassword: req.user.mustChangePassword ?? false,
     };
 

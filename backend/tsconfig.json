@@ -4,13 +4,14 @@
     "declaration": true,
     "removeComments": true,
     "emitDecoratorMetadata": true,
+    "ignoreDeprecations": "5.0",
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
     "target": "ES2023",
     "sourceMap": true,
     "outDir": "./dist",
     "rootDir": ".",
-    "baseUrl": "./",
+    //"baseUrl": "./",
     "incremental": true,
     "skipLibCheck": true,
     "strictNullChecks": true,
@@ -19,12 +20,13 @@
     "forceConsistentCasingInFileNames": true,
     "noFallthroughCasesInSwitch": false,
     "moduleResolution": "node",
-    "resolvePackageJsonExports": false,
     "esModuleInterop": true,
-    "isolatedModules": true,
+    "isolatedModules": false,
     "types": ["node", "jest"],
     "paths": {
-      "@/*": ["src/*"]
+      "src/*": ["./src/*"],
+
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src/**/*", "test/**/*.ts"],

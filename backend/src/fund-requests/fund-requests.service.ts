@@ -24,6 +24,8 @@ import { POLineSearchResponseDto } from './dto/po-search-response.dto';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { FullFundRequestPayload } from '@/notifications/types/notification-payload.interface';
 import { logger } from '@/common/logger/logger';
+import { POLineBalances } from './domain/types';
+import { FundRequestRepository } from './infrastructure/fund-request.repository';
 
 /** Extended type to include nested relations */
 type FundRequestWithRelations = FundRequest & {
@@ -52,6 +54,7 @@ interface FundRequestFilters {
 export class FundRequestsService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly fundRequestRepo: FundRequestRepository,
     private readonly notificationsService: NotificationsService,
     @InjectQueue('notifications') private readonly notificationsQueue: Queue<NotificationJobPayload>,
   ) {}
@@ -120,13 +123,34 @@ export class FundRequestsService {
       throw new BadRequestException('Requested amount must be greater than 0');
     }
 
+    // Determine if this is a manual entry (no PO or line information) or a structured one. This affects the 'source' fields and notification payload.
     const isManual =
       !dto.poNumber || !dto.poLineNumber || dto.poNumber === 'TEMP-PO' || dto.poLineNumber === 'TEMP-LINE';
 
+    /**
+     * TRANSACTIONAL LOGIC:
+     * 1. Upsert PO based on duid + poNumber (handles both manual and structured entries)
+     * 2. Upsert PO Line based on purchaseOrderId + poLineNumber (handles both manual and structured entries)
+     * 3. Validate requested amount against contract if it exists
+     * 4. Create Fund Request
+     * 5. Notify Admins (outside transaction to avoid delays in user response)
+     * Note: We use "Serializable" isolation to ensure that concurrent requests for the same PO line are properly serialized, preventing race conditions
+     * Important: We do NOT update the PO line's totalRequestedAmount or totalApprovedAmount inside this transaction. Instead,
+     * we calculate those on-the-fly during approval to ensure accuracy and prevent concurrency issues.
+     * This means that the "remainingBalance" is also calculated dynamically rather than stored, which simplifies our logic and reduces potential bugs.
+     * This approach ensures that we maintain data integrity without having to worry about multiple concurrent fund requests trying to update the same PO line balances at the same time,
+     * which can lead to complex locking and potential deadlocks.
+     * By calculating totals during approval, we ensure that we always have the most up-to-date information without risking transaction conflicts.
+     * This also means that the "remainingBalance" field on the PO line is more of a "snapshot" value that can be used for quick reference but is not the source of truth for calculations.
+     * The source of truth for approvals will always be the contractAmount minus the sum of approved fund requests at the time of approval.
+     * This design choice significantly reduces the complexity of our transactions and allows for better scalability as we don't have to worry about locking PO line records during fund request creation.
+     */
     const fundRequest = await this.prisma.$transaction(
       async (tx) => {
-        // 1. Upsert PO
+        // 1. Upsert PO based on duid + poNumber. For manual entries, we use a "TEMP-PO" placeholder to ensure uniqueness while allowing the user to create a fund request.
         const po = await tx.purchaseOrder.upsert({
+          // Using composite unique index on duid, ponumber to ensure we do not create duplicate pos for the same duid + poNumber combination.
+          // This allows us to handle both manual and structured entries gracefully.
           where: { duid_poNumber: { duid: dto.duid.trim(), poNumber: dto.poNumber?.trim() ?? 'TEMP-PO' } },
           create: {
             duid: dto.duid.trim(),
@@ -135,10 +159,10 @@ export class FundRequestsService {
             projectCode: dto.projectCode,
             prNumber: dto.prNumber,
           },
-          update: {},
+          update: {}, // We do not update existing POs during fund request creation to preserve historical data integrity. Any changes to PO details should be handled through a separate process with proper auditing.
         });
 
-        // 2. Upsert PO Line
+        // 2. Upsert PO Line based on purchaseOrderId + poLineNumber. For manual entries, we use a "TEMP-LINE" placeholder to ensure uniqueness while allowing the user to create a fund request without specific line information.
         const poLine = await tx.purchaseOrderLine.upsert({
           where: {
             purchaseOrderId_poLineNumber: {
@@ -158,15 +182,21 @@ export class FundRequestsService {
             poLineAmount: dto.poLineAmount,
             poIssuedDate: dto.poIssuedDate,
             contractAmount: null,
+            /**
+             * This cached totals below used on the po line exists for performance, fast reads for ui, reporting, and avoiding repeated aggregates at scale.
+             */
             totalRequestedAmount: new Prisma.Decimal(0),
             totalRejectedAmount: new Prisma.Decimal(0),
             totalApprovedAmount: new Prisma.Decimal(0),
             remainingBalance: new Prisma.Decimal(0),
           },
-          update: {},
+          update: {}, // We do not update existing PO lines during fund request creation to preserve historical data integrity. Any changes to PO line details should be handled through a separate process with proper auditing.
         });
 
         // 3. Validate against contract
+        // Also note that against performace stored in the poLine in line 183, this methods ensures correctness over perfomance.
+        //  At this point we have access to the source of truth for total requested amount
+        // But also, it degrades performance, fast reads for UI
         const aggregate = await tx.fundRequest.aggregate({
           where: {
             purchaseOrderLineId: poLine.id,
@@ -175,10 +205,13 @@ export class FundRequestsService {
           _sum: { requestedAmount: true },
         });
 
-        const currentTotal = aggregate._sum.requestedAmount ?? new Prisma.Decimal(0);
-        const newTotal = currentTotal.plus(dto.requestedAmount);
+        // Use safe defaults to prevent "plus" crashes on null values.
+        // The aggregate will return null for _sum.requestedAmount if there are no matching fund requests, so we default to 0 in that case
+        // Stored totals are not mutated here just calculating a proposed future state
+        const currentTotal = aggregate._sum.requestedAmount ?? new Prisma.Decimal(0); // from the database
+        const newTotal = currentTotal.plus(dto.requestedAmount); // adding the new request amount to the total summed from the already existing data
 
-        // ✅ Safe Error Message: Check if contractAmount exists before calling .toFixed()
+        // Safe Error Message: Check if contractAmount exists before calling .toFixed()
         if (poLine.contractAmount && newTotal.gt(poLine.contractAmount)) {
           const maxStr = poLine.contractAmount ? poLine.contractAmount.toFixed(2) : '0.00';
           throw new BadRequestException(`Request exceeds contract. Total: ${newTotal.toFixed(2)}, Max: ${maxStr}`);
@@ -197,7 +230,7 @@ export class FundRequestsService {
         }) as Promise<FundRequestWithRelations>;
       },
       {
-        isolationLevel: 'Serializable',
+        isolationLevel: 'Serializable', // Ensure the highest isolation level to prevent race conditions
       },
     );
 
@@ -371,8 +404,11 @@ export class FundRequestsService {
   }
 
   private async handleApproval(tx: Prisma.TransactionClient, request: FundRequestWithRelations, adminId: string) {
+    // 💡 Create shortcuts for cleaner code
+    // We have already loaded the purchaseOrderLine and purchaseOrder in the parent transaction, so we can safely access them here without additional queries
     const poLine = request.purchaseOrderLine;
 
+    //
     if (!poLine.contractAmount) {
       throw new BadRequestException({
         message: 'Contract amount required',
@@ -381,58 +417,28 @@ export class FundRequestsService {
       });
     }
 
-    const activeContract = poLine.contractAmount;
+    const repo = this.fundRequestRepo.withTx(tx);
 
-    // 1. Calculate current usage
-    const aggregate = await tx.fundRequest.aggregate({
-      where: {
-        purchaseOrderLineId: poLine.id,
-        id: { not: request.id },
-        status: FundRequestStatus.APPROVED,
-      },
-      _sum: { requestedAmount: true },
-    });
+    const { approvedSum } = await repo.getApprovedAggregate(poLine.id, request.id);
 
-    const used = aggregate._sum.requestedAmount ?? new Prisma.Decimal(0);
-    const totalWithCurrent = used.plus(request.requestedAmount);
+    const proposedTotal = approvedSum.plus(request.requestedAmount);
 
-    // 2. Limit Check
-    if (totalWithCurrent.gt(activeContract)) {
-      throw new BadRequestException('Approval exceeds contract limit.');
+    if (proposedTotal.gt(poLine.contractAmount)) {
+      throw new BadRequestException('Approval exceeds contract limit');
     }
 
-    // 3. Update Request Status
-    const approved = await tx.fundRequest.update({
-      where: { id: request.id },
-      data: {
-        status: FundRequestStatus.APPROVED,
-        approvedBy: adminId,
-        approvedAt: new Date(),
-      },
-      include: { purchaseOrderLine: { include: { purchaseOrder: true } } },
-    });
+    const approved = await repo.approveFundRequest(request.id, adminId);
 
-    // 4. Update PO Line Balances
-    const currentApproved = poLine.totalApprovedAmount ?? new Prisma.Decimal(0);
-    const currentRequested = poLine.totalRequestedAmount ?? new Prisma.Decimal(0);
+    const balances: POLineBalances = {
+      totalApprovedAmount: proposedTotal,
+      totalRequestedAmount: poLine.totalRequestedAmount.plus(request.requestedAmount),
+      remainingBalance: poLine.contractAmount.minus(proposedTotal),
+    };
 
-    const nextApprovedTotal = currentApproved.plus(request.requestedAmount);
+    const result = await repo.updatePOLineBalances(poLine.id, poLine.totalApprovedAmount, balances);
 
-    // Use updateMany for a concurrency safe-guard
-    const updateResult = await tx.purchaseOrderLine.updateMany({
-      where: {
-        id: poLine.id,
-        totalApprovedAmount: poLine.totalApprovedAmount, // Concurrency check
-      },
-      data: {
-        totalApprovedAmount: nextApprovedTotal,
-        totalRequestedAmount: currentRequested.plus(request.requestedAmount),
-        remainingBalance: activeContract.minus(nextApprovedTotal),
-      },
-    });
-
-    if (updateResult.count !== 1) {
-      throw new ConflictException('The record was updated by another user. Please try again.');
+    if (!result.updated) {
+      throw new ConflictException('Concurrent update detected');
     }
 
     return approved;
@@ -444,30 +450,15 @@ export class FundRequestsService {
     rejectionReason: string | undefined,
     adminId: string,
   ) {
-    const poLine = request.purchaseOrderLine;
+    if (request.status !== FundRequestStatus.PENDING) {
+      throw new ConflictException('Only pending requests can be rejected.');
+    }
 
-    // 1. Update the individual fund request status
-    const rejected = await tx.fundRequest.update({
-      where: { id: request.id },
-      data: {
-        status: FundRequestStatus.REJECTED,
-        rejectionReason: rejectionReason?.trim() || 'N/A',
-        rejectedBy: adminId,
-        rejectedAt: new Date(),
-      },
-      include: { purchaseOrderLine: { include: { purchaseOrder: true } } },
-    });
+    const repo = this.fundRequestRepo.withTx(tx);
 
-    // 2. Increment the totalRejectedAmount on the associated PO line
-    // Use fallback to 0 to prevent "plus" crashes on null database values
-    const currentRejected = poLine.totalRejectedAmount ?? new Prisma.Decimal(0);
+    const rejected = await repo.rejectFundRequest(request.id, rejectionReason?.trim() || 'N/A', adminId);
 
-    await tx.purchaseOrderLine.update({
-      where: { id: poLine.id },
-      data: {
-        totalRejectedAmount: currentRejected.plus(request.requestedAmount),
-      },
-    });
+    await repo.updatePOLineRejectedAmountIncrement(request.purchaseOrderLine.id, request.requestedAmount);
 
     return rejected;
   }

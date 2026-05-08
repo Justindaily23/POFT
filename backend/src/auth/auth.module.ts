@@ -9,6 +9,8 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth-guard';
 import type { StringValue } from 'ms';
 import { NotificationsModule } from '@/notifications/notifications.module';
+import { TokenService } from './token/token.service';
+import { SessionService } from './session/session.service';
 
 @Module({
   imports: [
@@ -24,7 +26,7 @@ import { NotificationsModule } from '@/notifications/notifications.module';
       }),
     }),
   ],
-  providers: [AuthService, LocalStrategy, JwtStrategy, JwtAuthGuard],
+  providers: [AuthService, LocalStrategy, JwtStrategy, JwtAuthGuard, TokenService, SessionService],
   exports: [AuthService, JwtAuthGuard],
   controllers: [AuthController],
 })

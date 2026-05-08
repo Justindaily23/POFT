@@ -8,7 +8,7 @@ import {
 import { PrismaService } from 'src/prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
-import { AuthRole, NotificationType } from '@prisma/client';
+import { AuthRole, NotificationType, Prisma, User } from '@prisma/client';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { logger } from 'src/common/logger/logger';
 import { createHash, randomBytes } from 'crypto';
@@ -16,12 +16,16 @@ import { ConfigService } from '@nestjs/config';
 import ms, { type StringValue } from 'ms';
 import { Response } from 'express';
 import { NotificationsService } from '@/notifications/notifications.service';
+import { JwtSignUser } from './types/jwtSignUser';
+import { TokenService } from './token/token.service';
+import { SessionService } from './session/session.service';
 
 export interface AuthenticatedUser {
   id: string;
   role: AuthRole;
   email: string;
   name: string;
+  tokenVersion: number;
   mustChangePassword: boolean;
 }
 
@@ -30,31 +34,31 @@ export interface JwtPayload {
   role: AuthRole;
   email: string;
   name: string;
+  tokenVersion: number;
   mustChangePassword?: boolean;
 }
 
 @Injectable()
 export class AuthService {
-  private hashToken(token: string): string {
-    return createHash('sha256').update(token).digest('hex');
-  }
+  // private hashToken(token: string): string {
+  //   return createHash('sha256').update(token).digest('hex');
+  // }
   constructor(
     private readonly prisma: PrismaService,
-    private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly notificationsService: NotificationsService,
+    private readonly tokenService: TokenService,
+    private readonly sessionService: SessionService,
   ) {}
 
   /* ─────────────────────────────────────────────────────────────
      INTERNAL SAFE RESOLVERS (NO BEHAVIOR CHANGE)
      ───────────────────────────────────────────────────────────── */
-
-  private getAccessTokenExpiry(): StringValue {
-    return (this.configService.get<string>('JWT_EXPIRES_IN') ?? '15m') as StringValue;
-  }
-
-  private getRefreshTokenExpiry(defaultValue: StringValue): StringValue {
-    return (this.configService.get<string>('REFRESH_TOKEN_EXPIRES_IN') ?? defaultValue) as StringValue;
+  private async bumpTokenVersion(userId: string, tx: Prisma.TransactionClient) {
+    await tx.user.update({
+      where: { id: userId },
+      data: { tokenVersion: { increment: 1 } },
+    });
   }
 
   /* ───────────────────────────────────────────────────────────── */
@@ -71,22 +75,27 @@ export class AuthService {
       role: user.role,
       email: user.email,
       name: user.fullName,
+      tokenVersion: user.tokenVersion,
       mustChangePassword: user.mustChangePassword,
     };
   }
 
   async login(user: AuthenticatedUser, res: Response, userAgent: string, ip: string, deviceId?: string) {
-    const payload: JwtPayload = {
-      sub: user.id,
-      role: user.role,
-      email: user.email,
-      name: user.name,
-      mustChangePassword: user.mustChangePassword,
-    };
-
-    const accessToken = this.jwtService.sign(payload, {
-      expiresIn: this.getAccessTokenExpiry(),
+    const freshUser = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: {
+        id: true,
+        role: true,
+        email: true,
+        tokenVersion: true,
+        mustChangePassword: true,
+      },
     });
+
+    if (!freshUser) {
+      throw new UnauthorizedException('Account not available');
+    }
+    const accessToken = this.tokenService.signAccessToken(freshUser);
 
     const resolvedDeviceId = deviceId || randomBytes(16).toString('hex');
 
@@ -98,13 +107,13 @@ export class AuthService {
     });
 
     const refreshToken = randomBytes(64).toString('hex');
-    const hashedRefreshToken = this.hashToken(refreshToken);
+    const hashedRefreshToken = this.tokenService.hashToken(refreshToken);
 
-    const refreshTtl = this.getRefreshTokenExpiry('24h');
+    const refreshTtl = this.tokenService.getRefreshTokenExpiry('8hr');
     const expiresAt = new Date(Date.now() + ms(refreshTtl));
 
     // This handles 1,000 concurrent users without race condition crashes.
-    await this.prisma.refreshSession.upsert({
+    await this.sessionService.upsertSession({
       where: { userId_deviceId: { userId: user.id, deviceId: resolvedDeviceId } },
       update: {
         refreshToken: hashedRefreshToken,
@@ -145,41 +154,61 @@ export class AuthService {
     // 1. Validate inputs early
     if (!refreshToken || !deviceId) {
       logger.warn(`Refresh attempt blocked: Missing ${!refreshToken ? 'token' : 'deviceId'}`);
-      throw new UnauthorizedException('Login Failed');
+      throw new UnauthorizedException('Please login again');
     }
 
-    const incomingHash = this.hashToken(refreshToken);
+    const incomingHash = this.tokenService.hashToken(refreshToken);
 
     // 2. Strict Session Lookup
     // Optimization: Find the session specifically for this device AND ensure it's not expired
-    const session = await this.prisma.refreshSession.findFirst({
-      where: {
-        deviceId,
-        expiresAt: { gt: new Date() },
+    const session = await this.sessionService.findValidSession(deviceId);
+
+    if (!session) throw new UnauthorizedException();
+
+    // Fetch fresh user authoritatively here to ensure we have the latest tokenVersion and isActive status
+    const user = await this.prisma.user.findUnique({
+      where: { id: session.userId },
+      select: {
+        id: true,
+        role: true,
+        email: true,
+        fullName: true,
+        tokenVersion: true,
+        mustChangePassword: true,
+        isActive: true,
       },
-      include: { user: true },
     });
 
-    if (!session || !session.user) {
+    if (!user || !user.isActive) {
       throw new UnauthorizedException('Session expired. Please log in again.');
+    }
+
+    // TOKEN VERSION CHECK (Immediate Revocation)
+    if (session.user.tokenVersion !== user.tokenVersion) {
+      await this.sessionService.deleteSession(user.id, deviceId);
+
+      logger.warn(`Token version mismatch detected for user ${user.id}`);
+
+      throw new UnauthorizedException('Session invalid. Please login again.');
     }
 
     // FAST: SHA-256 comparison
     if (incomingHash !== session.refreshToken) {
-      // Potential theft: Clear all sessions for this device
-      await this.prisma.refreshSession.deleteMany({ where: { userId: session.userId, deviceId } });
+      // Potential theft: Clear all sessions for this device preventing replay attacks.. hehehehhe we keep learning
+      // Replay attack is when attacker steals the refresh token and tries to use it multiple times. By deleting the session immediately, we prevent any further use of that stolen token.
+      await this.sessionService.deleteSession(session.userId, deviceId);
       logger.error(`Security breach! Token reuse on device: ${deviceId}`);
 
       throw new UnauthorizedException('Security breach detected');
     }
 
-    // 4. Generate New Credentials
+    //  Generate New Credentials
     const newRefreshToken = randomBytes(64).toString('hex');
-    const hashedNewRefreshToken = this.hashToken(newRefreshToken);
-    const refreshTtl = this.getRefreshTokenExpiry('5d');
+    const hashedNewRefreshToken = this.tokenService.hashToken(newRefreshToken);
+    const refreshTtl = this.tokenService.getRefreshTokenExpiry('5d');
     const newExpiresAt = new Date(Date.now() + ms(refreshTtl));
 
-    // 5. Atomic Session Update
+    //  Session Update - We update the same session record instead of creating a new one to prevent database bloat and maintain a clean session history.
     await this.prisma.refreshSession.update({
       where: { id: session.id },
       data: {
@@ -190,20 +219,11 @@ export class AuthService {
       },
     });
 
-    // 6. Sign New Access Token
-    const payload: JwtPayload = {
-      sub: session.user.id,
-      role: session.user.role,
-      email: session.user.email,
-      name: session.user.fullName,
-      mustChangePassword: session.user.mustChangePassword,
-    };
+    // We sign a new access token with the latest user information, including the tokenVersion.
+    // This ensures that if the user's tokenVersion has been incremented (e.g., due to a password change or logout), the old access token will be invalidated immediately.
+    const accessToken = this.tokenService.signAccessToken(user);
 
-    const accessToken = this.jwtService.sign(payload, {
-      expiresIn: this.getAccessTokenExpiry(),
-    });
-
-    // 7. CRITICAL: Cross-Domain Cookie Settings
+    //  CRITICAL: Cross-Domain Cookie Settings
     // 'none' and 'secure' are MANDATORY for Vercel <-> Render communication
     res.cookie('refreshToken', newRefreshToken, {
       httpOnly: true,
@@ -218,8 +238,12 @@ export class AuthService {
 
   // Log out one single/current device
   async logout(userId: string, deviceId: string, res: Response) {
-    await this.prisma.refreshSession.deleteMany({
-      where: { userId, deviceId },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.refreshSession.deleteMany({
+        where: { userId, deviceId },
+      });
+
+      await this.bumpTokenVersion(userId, tx);
     });
 
     const cookieOptions = {
@@ -238,8 +262,9 @@ export class AuthService {
 
   // Logout all devices (Global Logout)
   async logoutAllDevices(userId: string, res: Response) {
-    await this.prisma.refreshSession.deleteMany({
-      where: { userId },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.refreshSession.deleteMany({ where: { userId } });
+      await this.bumpTokenVersion(userId, tx);
     });
 
     const cookieOptions = {
@@ -280,25 +305,24 @@ export class AuthService {
     }
 
     const hashedPassword = await bcrypt.hash(dto.newPassword, 12);
-
-    await this.prisma.$transaction([
-      // 1. Update password and remove the force-change flag
-      this.prisma.user.update({
+    await this.prisma.$transaction(async (tx) => {
+      // 1. Update password & increment tokenVersion
+      await tx.user.update({
         where: { id: userId },
         data: {
           password: hashedPassword,
           mustChangePassword: false,
+          tokenVersion: { increment: 1 }, // This kills all existing Access Tokens
         },
-      }),
-      // 2. IMPORTANT: Invalidate all sessions globally after password change
-      this.prisma.refreshSession.deleteMany({
+      });
+      // 2. Invalidate all Refresh Sessions (passing tx)
+      await this.sessionService.revokeSessions(userId, tx);
+
+      // 3. Kill pending reset tokens
+      await tx.passwordResetToken.deleteMany({
         where: { userId },
-      }),
-      // 3. KILL any pending "Forgot Password" tokens for this user
-      this.prisma.passwordResetToken.deleteMany({
-        where: { userId },
-      }),
-    ]);
+      });
+    });
 
     return { message: 'Password updated successfully. Please log in again.' };
   }
@@ -317,7 +341,7 @@ export class AuthService {
 
     // 3. GENERATE SECURE TOKEN
     const resetTokenSecret = randomBytes(32).toString('hex');
-    const hashedToken = this.hashToken(resetTokenSecret);
+    const hashedToken = this.tokenService.hashToken(resetTokenSecret);
 
     // 4. SET EXPIRY (e.g., 1 hour from now)
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
@@ -371,7 +395,7 @@ export class AuthService {
 
     // 4. FAST CRYPTOGRAPHIC VERIFICATION (SHA-256)
     // Re-hash the secret from the URL and compare directly
-    const incomingHash = this.hashToken(tokenSecret);
+    const incomingHash = this.tokenService.hashToken(tokenSecret);
     if (incomingHash !== resetRecord.token) {
       logger.warn(`SECURITY ALERT: Token mismatch for User ID ${resetRecord.userId}`);
       throw new BadRequestException('Invalid reset link.');
@@ -381,21 +405,20 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(dto.newPassword, 12);
 
     // 6. ATOMIC TRANSACTION (Array style is faster for 1,000 users)
-    await this.prisma.$transaction([
-      this.prisma.user.update({
+    await this.prisma.$transaction(async (tx) => {
+      (await tx.user.update({
         where: { id: resetRecord.userId },
         data: {
           password: hashedPassword,
           mustChangePassword: false,
+          tokenVersion: { increment: 1 }, // Invalidate all existing refresh tokens immediately
         },
       }),
-      this.prisma.passwordResetToken.deleteMany({
-        where: { userId: resetRecord.userId },
-      }),
-      this.prisma.refreshSession.deleteMany({
-        where: { userId: resetRecord.userId },
-      }),
-    ]);
+        await tx.passwordResetToken.deleteMany({
+          where: { userId: resetRecord.userId },
+        }),
+        await this.sessionService.revokeSessions(resetRecord.userId, tx)); // Invalidate all sessions immediately
+    });
 
     logger.info(`SUCCESS: Password recovered for ${resetRecord.user.email}`);
     return { message: 'Password reset successful. You can now log in.' };

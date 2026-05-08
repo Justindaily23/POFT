@@ -82,6 +82,7 @@ model User {
   password           String
   isActive           Boolean @default(true)
   mustChangePassword Boolean @default(true)
+  tokenVersion       Int    @default(1) // for invalidating refresh tokens on password change or logout
 
   notifications        Notification[]
   role                 AuthRole         @default(USER)
