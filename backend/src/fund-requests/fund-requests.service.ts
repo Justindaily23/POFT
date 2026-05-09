@@ -343,7 +343,10 @@ export class FundRequestsService {
                 status: fundRequest.status,
                 requestedAmount: (fundRequest.requestedAmount ?? new Prisma.Decimal(0)).toNumber(),
                 contractAmount: (poLine.contractAmount ?? new Prisma.Decimal(0)).toNumber(),
-                remainingBalance: (poLine.remainingBalance ?? new Prisma.Decimal(0)).toNumber(),
+                remainingBalance:
+                  (poLine.contractAmount ?? new Prisma.Decimal(0)).toNumber() -
+                  (poLine.totalApprovedAmount ?? new Prisma.Decimal(0)).toNumber() -
+                  (fundRequest.requestedAmount ?? new Prisma.Decimal(0)).toNumber(),
                 poLineNumber: poLine.poLineNumber ?? undefined,
               }
             : {
