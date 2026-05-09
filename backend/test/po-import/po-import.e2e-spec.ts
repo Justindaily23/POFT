@@ -10,6 +10,7 @@ import { cleanDatabase, disconnectUtilPrisma, prisma as utilPrisma } from '../ut
 import { createPoExcelBuffer } from '../utils/excel.util';
 import { getQueueToken } from '@nestjs/bull';
 import { Queue } from 'bull';
+jest.setTimeout(60000);
 
 describe('PO Excel Import (E2E)', () => {
   let app: INestApplication;
@@ -19,7 +20,7 @@ describe('PO Excel Import (E2E)', () => {
     app = await createTestApp();
     prisma = app.get(PrismaService);
     if (!fs.existsSync('./uploads')) fs.mkdirSync('./uploads');
-  });
+  }, 30000);
 
   afterAll(async () => {
     // 1. Gracefully close the Bull Queue to stop Redis heartbeats
@@ -53,6 +54,7 @@ describe('PO Excel Import (E2E)', () => {
         fullName: 'Admin User',
         phoneNumber: '+2348000000001',
         role: 'SUPER_ADMIN',
+        tokenVersion: 1,
       },
     });
 

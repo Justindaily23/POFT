@@ -28,15 +28,21 @@ beforeAll(async () => {
 
   // Create PM and Admin users
   const pm = await prisma.user.create({
-    data: { email: 'pm1@test.com', fullName: 'PM One', password: 'password', role: AuthRole.USER },
+    data: { email: 'pm1@test.com', fullName: 'PM One', password: 'password', role: AuthRole.USER, tokenVersion: 1 },
   });
   const admin = await prisma.user.create({
-    data: { email: 'admin1@test.com', fullName: 'Admin One', password: 'password', role: AuthRole.SUPER_ADMIN },
+    data: {
+      email: 'admin1@test.com',
+      fullName: 'Admin One',
+      password: 'password',
+      role: AuthRole.SUPER_ADMIN,
+      tokenVersion: 1,
+    },
   });
 
   // Token already includes "Bearer "
-  pmToken = `Bearer ${jwtService.sign({ sub: pm.id, role: pm.role })}`;
-  adminToken = `Bearer ${jwtService.sign({ sub: admin.id, role: admin.role })}`;
+  pmToken = `Bearer ${jwtService.sign({ sub: pm.id, role: pm.role, tokenVersion: pm.tokenVersion })}`;
+  adminToken = `Bearer ${jwtService.sign({ sub: admin.id, role: admin.role, tokenVersion: admin.tokenVersion })}`;
 
   // Seed initial PO
   const po = await prisma.purchaseOrder.create({

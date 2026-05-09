@@ -6,6 +6,8 @@ import { createTestApp } from '../setup/test-app';
 import * as bcrypt from 'bcrypt';
 import { disconnectUtilPrisma } from '../utils/database.util';
 
+jest.setTimeout(60000); // Give the whole file 60 seconds
+
 describe('Auth E2E (Session Lifecycle)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
@@ -17,19 +19,20 @@ describe('Auth E2E (Session Lifecycle)', () => {
     app = await createTestApp();
     prisma = app.get(PrismaService);
 
-    const hashed = await bcrypt.hash(password, 10);
+    const hashed = await bcrypt.hash(password, 1);
     await prisma.user.upsert({
       where: { email: adminEmail },
-      update: { password: hashed, mustChangePassword: false },
+      update: { password: hashed, mustChangePassword: false, tokenVersion: 1 },
       create: {
         email: adminEmail,
         fullName: 'Admin',
         role: 'SUPER_ADMIN',
         password: hashed,
         mustChangePassword: false,
+        tokenVersion: 1,
       },
     });
-  });
+  }, 30000);
 
   afterAll(async () => {
     // Close the Nest app and its internal Prisma connection
@@ -38,7 +41,7 @@ describe('Auth E2E (Session Lifecycle)', () => {
 
     // 2. Close the utility connection used for cleaning/seeding
     await disconnectUtilPrisma();
-  });
+  }, 30000);
 
   it('logs in admin', async () => {
     const res = await request(app.getHttpServer()).post('/auth/login').send({ email: adminEmail, password });

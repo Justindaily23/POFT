@@ -24,12 +24,19 @@ describe('Contract Amendments E2E', () => {
     await seedRequiredData();
 
     const admin = await prisma.user.create({
-      data: { email: 'admin-amend@test.com', fullName: 'Admin', password: 'password', role: AuthRole.SUPER_ADMIN },
+      data: {
+        email: 'admin-amend@test.com',
+        fullName: 'Admin',
+        password: 'password',
+        role: AuthRole.SUPER_ADMIN,
+        tokenVersion: 1,
+      },
     });
     adminToken = `Bearer ${jwtService.sign({
       sub: admin.id,
       role: admin.role,
       email: admin.email,
+      tokenVersion: admin.tokenVersion,
     })}`;
 
     const po = await prisma.purchaseOrder.create({

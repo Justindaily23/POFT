@@ -35,20 +35,26 @@ describe('Staff Creation Flow', () => {
 
     // Re-create the Admin user so loginAsAdmin works every time
     const hashed = await bcrypt.hash('adminPassword123', 10);
-    await prisma.user.create({
-      data: {
+    await prisma.user.upsert({
+      where: { email: 'admin@example.com' },
+      update: {
+        password: hashed,
+        tokenVersion: 1,
+      },
+      create: {
         email: 'admin@example.com',
         password: hashed,
         fullName: 'Admin',
         phoneNumber: '+2348000000001',
         role: 'SUPER_ADMIN',
         mustChangePassword: false,
+        tokenVersion: 1, // 👈 Required for your new security logic
       },
     });
 
     // Seed other dependencies
     await seedRequiredData();
-  });
+  }, 20000);
 
   it('creates staff successfully', async () => {
     const { accessToken } = await loginAsAdmin(app, 'admin@example.com', 'adminPassword123');

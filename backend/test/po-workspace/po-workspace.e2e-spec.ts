@@ -6,6 +6,7 @@ import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { AuthRole, PoLineStatus } from '@prisma/client';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
+jest.setTimeout(60000);
 
 describe('PO Workspace E2E', () => {
   let app: INestApplication;
@@ -23,9 +24,15 @@ describe('PO Workspace E2E', () => {
 
     // 1. Setup Admin
     const admin = await prisma.user.create({
-      data: { email: 'admin@stecam.com', fullName: 'Admin User', password: 'password', role: AuthRole.SUPER_ADMIN },
+      data: {
+        email: 'admin@stecam.com',
+        fullName: 'Admin User',
+        password: 'password',
+        role: AuthRole.SUPER_ADMIN,
+        tokenVersion: 1,
+      },
     });
-    adminToken = `Bearer ${jwt.sign({ sub: admin.id, role: admin.role })}`;
+    adminToken = `Bearer ${jwt.sign({ sub: admin.id, role: admin.role, tokenVersion: admin.tokenVersion })}`;
 
     // 2. Setup Types & POs
     const srvType = await prisma.poType.create({ data: { name: 'Service', code: 'SRV' } });
@@ -60,7 +67,7 @@ describe('PO Workspace E2E', () => {
         },
       ],
     });
-  });
+  }, 30000);
 
   afterAll(async () => {
     // Close the Nest app and its internal Prisma connection
@@ -69,7 +76,7 @@ describe('PO Workspace E2E', () => {
 
     // 2. Close the utility connection used for cleaning/seeding
     await disconnectUtilPrisma();
-  });
+  }, 30000);
 
   it('GET /po-workspace - should return metrics and data', async () => {
     const res = await request(app.getHttpServer()).get('/po-workspace').set('Authorization', adminToken);

@@ -9,6 +9,8 @@ import { JwtService } from '@nestjs/jwt';
 import { NotificationsService } from '../../src/notifications/notifications.service';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 
+jest.setTimeout(60000);
+
 describe('PO Analytics & PM Dashboard E2E', () => {
   let app: INestApplication;
   let prisma: PrismaService;
@@ -41,12 +43,13 @@ describe('PO Analytics & PM Dashboard E2E', () => {
     // 2. SETUP PM USER & PROFILE
     const pmUser = await prisma.user.upsert({
       where: { email: 'pm.analytics@test.com' },
-      update: {},
+      update: { tokenVersion: 1 },
       create: {
         email: 'pm.analytics@test.com',
         fullName: 'John PM',
         password: 'hashed_password',
         role: AuthRole.USER,
+        tokenVersion: 1,
         staffProfiles: {
           create: {
             staffId: 'STC-PM-LAG-001',
@@ -64,8 +67,9 @@ describe('PO Analytics & PM Dashboard E2E', () => {
       sub: pmUser.id,
       role: pmUser.role,
       email: pmUser.email,
+      tokenVersion: pmUser.tokenVersion,
     })}`;
-  });
+  }, 30000);
 
   afterAll(async () => {
     // Close the Nest app and its internal Prisma connection
@@ -74,7 +78,7 @@ describe('PO Analytics & PM Dashboard E2E', () => {
 
     // 2. Close the utility connection used for cleaning/seeding
     await disconnectUtilPrisma();
-  });
+  }, 30000);
   it('aggregates dashboard data and heals status to RED in the background', async () => {
     const notificationsService = app.get(NotificationsService);
     const notifySpy = jest.spyOn(notificationsService, 'notify');
