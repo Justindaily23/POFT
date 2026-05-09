@@ -151,21 +151,12 @@ export class AuthService {
   }
 
   async refresh(refreshToken: string, deviceId: string, res: Response, userAgent: string, ip: string) {
-    // 1. Validate inputs early
-    if (!refreshToken || !deviceId) {
-      logger.warn(`Refresh attempt blocked: Missing ${!refreshToken ? 'token' : 'deviceId'}`);
-      throw new UnauthorizedException('Please login again');
-    }
+    if (!refreshToken || !deviceId) throw new UnauthorizedException('Please login again');
 
     const incomingHash = this.tokenService.hashToken(refreshToken);
-
-    // 2. Strict Session Lookup
-    // Optimization: Find the session specifically for this device AND ensure it's not expired
     const session = await this.sessionService.findValidSession(deviceId);
-
     if (!session) throw new UnauthorizedException();
 
-    // Fetch fresh user authoritatively here to ensure we have the latest tokenVersion and isActive status
     const user = await this.prisma.user.findUnique({
       where: { id: session.userId },
       select: {
@@ -179,57 +170,67 @@ export class AuthService {
       },
     });
 
-    if (!user || !user.isActive) {
-      throw new UnauthorizedException('Session expired. Please log in again.');
-    }
+    if (!user || !user.isActive) throw new UnauthorizedException('User inactive.');
 
-    // TOKEN VERSION CHECK (Immediate Revocation)
+    // FIX: Compare session's version (if stored) or user's version
+    // If your RefreshSession table doesn't have tokenVersion, use session.userId
     if (session.user.tokenVersion !== user.tokenVersion) {
       await this.sessionService.deleteSession(user.id, deviceId);
-
-      logger.warn(`Token version mismatch detected for user ${user.id}`);
-
       throw new UnauthorizedException('Session invalid. Please login again.');
     }
 
-    // FAST: SHA-256 comparison
-    if (incomingHash !== session.refreshToken) {
-      // Potential theft: Clear all sessions for this device preventing replay attacks.. hehehehhe we keep learning
-      // Replay attack is when attacker steals the refresh token and tries to use it multiple times. By deleting the session immediately, we prevent any further use of that stolen token.
+    const isCurrentToken = incomingHash === session.refreshToken;
+    const isPreviousToken = incomingHash === session.previousRefreshToken;
+    const gracePeriodMs = 30 * 1000; // 30 seconds
+    const wasRecentlyRotated = Date.now() - new Date(session.rotatedAt).getTime() < gracePeriodMs;
+
+    // CASE 1: Race Condition (Double Refresh)
+    if (isPreviousToken && wasRecentlyRotated) {
+      const accessToken = this.tokenService.signAccessToken(user);
+      // Best practice: Re-sync the cookie with the CURRENT valid refresh token
+      res.cookie('refreshToken', session.refreshToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'none',
+        path: '/',
+        expires: session.expiresAt,
+      });
+      return { accessToken };
+    }
+
+    // CASE 2: Actual Security Breach (Token reuse outside grace period)
+    if (!isCurrentToken) {
       await this.sessionService.deleteSession(session.userId, deviceId);
       logger.error(`Security breach! Token reuse on device: ${deviceId}`);
-
       throw new UnauthorizedException('Security breach detected');
     }
 
-    //  Generate New Credentials
+    // CASE 3: Standard Flow (isCurrentToken is true)
     const newRefreshToken = randomBytes(64).toString('hex');
     const hashedNewRefreshToken = this.tokenService.hashToken(newRefreshToken);
     const refreshTtl = this.tokenService.getRefreshTokenExpiry('5d');
     const newExpiresAt = new Date(Date.now() + ms(refreshTtl));
 
-    //  Session Update - We update the same session record instead of creating a new one to prevent database bloat and maintain a clean session history.
+    // Update session with new token and move current to previous
     await this.prisma.refreshSession.update({
       where: { id: session.id },
       data: {
         refreshToken: hashedNewRefreshToken,
+        previousRefreshToken: session.refreshToken,
+        rotatedAt: new Date(),
         expiresAt: newExpiresAt,
         userAgent,
         ipAddress: ip,
       },
     });
 
-    // We sign a new access token with the latest user information, including the tokenVersion.
-    // This ensures that if the user's tokenVersion has been incremented (e.g., due to a password change or logout), the old access token will be invalidated immediately.
     const accessToken = this.tokenService.signAccessToken(user);
 
-    //  CRITICAL: Cross-Domain Cookie Settings
-    // 'none' and 'secure' are MANDATORY for Vercel <-> Render communication
     res.cookie('refreshToken', newRefreshToken, {
       httpOnly: true,
-      secure: true, // Must be true for sameSite: 'none'
+      secure: true,
       sameSite: 'none',
-      path: '/', // Ensures cookie is available for all API routes
+      path: '/',
       expires: newExpiresAt,
     });
 

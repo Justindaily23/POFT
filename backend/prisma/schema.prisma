@@ -108,6 +108,8 @@ model RefreshSession {
   id           String    @id @default(uuid())
   userId       String
   refreshToken String // hashed refresh token
+  previousRefreshToken  String?   // hashed PREVIOUS refresh token <--- ADD THIS
+  rotatedAt             DateTime  @default(now()) 
   deviceId     String
   userAgent    String
   ipAddress    String

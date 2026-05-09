@@ -25,8 +25,8 @@ export class TokenService {
       sub: user.id,
       role: user.role,
       email: user.email,
-      tokenService: user.tokenVersion,
-      MustChangePassword: user.mustChangePassword ?? false,
+      tokenVersion: user.tokenVersion,
+      mustChangePassword: user.mustChangePassword ?? false,
     });
   }
 
