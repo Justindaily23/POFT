@@ -1,0 +1,34 @@
+services:
+  # The Redis Instance
+  poft-redis:
+    image: redis:7-alpine
+    container_name: poft-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - poft-network
+
+  # Your NestJS Application
+  poft-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: poft-backend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      # This hostname matches the service name 'poft-redis' exactly
+      - REDIS_HOST=poft-redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - REDIS_USE_TLS=false
+      # Include your database credentials or other .env requirements here
+    depends_on:
+      - poft-redis
+    networks:
+      - poft-network
+
+networks:
+  poft-network:
+    driver: bridge
