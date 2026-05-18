@@ -8,6 +8,16 @@ import { AppStatusResponse } from './types/interface/app-status.interface';
 export class AppController {
   constructor(private readonly configService: ConfigService) {}
 
+
+  @Public()
+  @Get('health')
+  get_infrastructure_health(): { status: string; timestamp: string } {
+    return {
+      status: 'UP',
+      timestamp: new Date().toISOString(),
+    };
+  }
+
   @Public()
   @Get()
   getHealth(): AppStatusResponse {

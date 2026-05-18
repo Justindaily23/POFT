@@ -5,7 +5,8 @@ import { CreateStaffAccountDto } from './dto/create-staff-account.dto';
 import { StaffAccountResponseDto } from './dto/staff-account-response.dto';
 import { randomBytes } from 'crypto';
 import * as bcrypt from 'bcrypt';
-import { Prisma, NotificationType } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
+import { NotificationType } from '@prisma/client';
 import { logger } from 'src/common/logger/logger';
 
 import { NotificationsService } from '@/notifications/notifications.service';
@@ -25,7 +26,7 @@ export class UserService {
     const { createdUser, staffProfile } = await (async () => {
       try {
         return await this.prisma.$transaction(
-          async (tx) => {
+          async (tx: Prisma.TransactionClient) => {
             const user = await this.createUserInternal(dto.user, hashedPassword, tx);
             const staffId = await this.generateStaffIdMultiInstanceSafe('STC', dto.staffRoleId, dto.stateId, tx);
 
@@ -100,7 +101,7 @@ export class UserService {
     // 1. Generate the Role Code (e.g., "Project Manager" -> "PM")
     const roleCode = role.name
       .split(/\s+/)
-      .map((w) => w[0])
+      .map((w: string) => w[0])
       .join('')
       .toUpperCase();
     const stateCode = state.code.toUpperCase();
