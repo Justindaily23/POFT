@@ -64,6 +64,8 @@ import { PrismaClientExceptionFilter } from './common/filters/prisma-exception.f
           password: config.get('REDIS_PASSWORD'),
           db: config.get<number>('REDIS_DB') || 0,
           tls: config.get('REDIS_USE_TLS') === 'true' ? { rejectUnauthorized: false } : undefined,
+          lazyConnect: true,  
+          enableReadyCheck: false,
           connectTimeout: 30_000,
           disconnectTimeout: 2000,
           keepAlive: 30_000,
