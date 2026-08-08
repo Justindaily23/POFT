@@ -12,7 +12,6 @@ import { NotificationsModule } from '@/notifications/notifications.module';
 import { TokenService } from './token/token.service';
 import { SessionService } from './session/session.service';
 import { AuthCacheService } from './cache/auth-cache.service';
-import Redis from 'ioredis';
 
 @Module({
   imports: [
@@ -35,19 +34,7 @@ import Redis from 'ioredis';
     JwtAuthGuard,
     TokenService,
     SessionService,
-    AuthCacheService,
-    {
-      provide: 'REDIS_CLIENT',
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => {
-        const redisUrl = configService.get<string>('REDIS_URL') || 'redis://localhost:6379';
-        return new Redis(redisUrl, {
-          connectTimeout: 10_000,
-          maxRetriesPerRequest: 3,
-          retryStrategy: (times) => (times > 5 ? null : times * 500),
-        });
-      },
-    },
+    AuthCacheService, // still injects 'REDIS_CLIENT' via @Inject — now supplied by the global RedisModule instead
   ],
   exports: [AuthService, JwtAuthGuard],
   controllers: [AuthController],

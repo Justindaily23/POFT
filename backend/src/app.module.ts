@@ -24,9 +24,10 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-yet';
 import { ContractAmendmentsModule } from './contract-amendments/contract-amendments.module';
-// import { RedisClientOptions } from 'redis';
-import { PrismaClientExceptionFilter } from './common/filters/prisma-exception.filter'; // Adjust path
+import { PrismaClientExceptionFilter } from './common/filters/prisma-exception.filter';
 import type { StringValue } from 'ms';
+import { RedisModule } from './redis/redis.module';
+import { getRedisConnectionOptions } from './redis/redis-config.util';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import type { StringValue } from 'ms';
       envFilePath: ['.env', `.env.${process.env.NODE_ENV || 'development'}`],
       cache: true,
     }),
+     RedisModule,
 
     JwtModule.registerAsync({
       inject: [ConfigService],
@@ -68,43 +70,25 @@ import type { StringValue } from 'ms';
       }),
     }),
 
-    // BullModule.forRootAsync({
-    //   inject: [ConfigService],
-    //   useFactory: (config: ConfigService) => ({
-    //     redis: {
-    //       host: config.get('REDIS_HOST'),
-    //       port: config.get<number>('REDIS_PORT') || 6379,
-    //       password: config.get('REDIS_PASSWORD'),
-    //       db: config.get<number>('REDIS_DB') || 0,
-    //       tls: config.get('REDIS_USE_TLS') === 'true' ? { rejectUnauthorized: false } : undefined,
-    //       lazyConnect: true,
-    //       enableReadyCheck: false,
-    //       connectTimeout: 30_000,
-    //       disconnectTimeout: 2000,
-    //       keepAlive: 30_000,
-    //       maxRetriesPerRequest: null,
-    //       retryStrategy: (times: number) => Math.min(times * 100, 3000),
-    //     },
-    //     settings: {
-    //       stalledInterval: 30_000,
-    //       guardInterval: 5000,
-    //     },
-    //   }),
-    // }),
+ 
 
     BullModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        connection: {
-          host: config.get('REDIS_HOST'),
-          port: config.get<number>('REDIS_PORT') || 6379,
-          password: config.get('REDIS_PASSWORD'),
-          tls: config.get('REDIS_USE_TLS') === 'true' ? {} : undefined,
-          maxRetriesPerRequest: null, // REQUIRED by BullMQ workers
-          enableReadyCheck: false,
-        },
-      }),
+      useFactory: (config: ConfigService) => {
+        const { host, port, password, tls } = getRedisConnectionOptions(config);
+        return {
+          connection: {
+            host,
+            port,
+            password,
+            tls,
+            maxRetriesPerRequest: null,
+            enableReadyCheck: false,
+          },
+        };
+      },
     }),
+
 
     CacheModule.registerAsync({
       isGlobal: true,
@@ -113,18 +97,11 @@ import type { StringValue } from 'ms';
         if (config.get('NODE_ENV') === 'test') {
           return { ttl: 0 };
         }
-
-        const useTls = config.get('REDIS_USE_TLS') === 'true';
-
+        const { host, port, password, tls } = getRedisConnectionOptions(config);
         return {
           store: await redisStore({
-            socket: {
-              host: config.get('REDIS_HOST'),
-              port: config.get<number>('REDIS_PORT') || 6379,
-              // Upstash requires TLS. {} is usually enough to trigger it.
-              tls: useTls,
-            },
-            password: config.get('REDIS_PASSWORD'),
+            socket: { host, port, tls: !!tls },
+            password,
             ttl: 3600,
           }),
         };
@@ -166,32 +143,4 @@ import type { StringValue } from 'ms';
 })
 export class AppModule {}
 
-// CacheModule.registerAsync({
-//   isGlobal: true,
-//   inject: [ConfigService],
-//   useFactory: async (config: ConfigService) => {
-//     // 🔒 E2E / TEST SAFETY GUARD
-//     if (config.get('NODE_ENV') === 'test') {
-//       return { ttl: 0 };
-//     }
-//     const host = config.get<string>('REDIS_HOST') || 'localhost';
-//     const port = config.get<number>('REDIS_PORT') || 6379;
-//     const password = config.get<string>('REDIS_PASSWORD');
-//     const useTls = config.get('REDIS_USE_TLS') === 'true'; // for Render / Upstash
 
-//     const socket: RedisClientOptions['socket'] = {
-//       host,
-//       port,
-//       reconnectStrategy: (retries) => Math.min(retries * 50, 500),
-//       ...(useTls ? { tls: { rejectUnauthorized: false } } : { tls: false as const }),
-//     } as RedisClientOptions['socket'];
-
-//     return {
-//       store: await redisStore({
-//         socket,
-//         password: password || undefined,
-//         ttl: 3600,
-//       }),
-//     };
-//   },
-// }),
