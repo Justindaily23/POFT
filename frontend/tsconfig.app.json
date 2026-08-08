@@ -8,9 +8,9 @@
     "module": "ESNext",
     "types": ["vite/client", "vite-plugin-pwa/client"],
     "skipLibCheck": true,
-    "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "src/*": ["./src/*"],
+      "@/*": ["./src/*"]
     },
 
     /* Bundler mode */

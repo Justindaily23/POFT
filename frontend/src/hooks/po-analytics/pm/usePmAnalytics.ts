@@ -1,10 +1,8 @@
 import { useState, useMemo, useRef, useCallback } from "react";
-import { usePmAnalyticsHooks } from "../usePmAnalyticsQuery";
+// import { usePmAnalyticsHooks } from "../usePmAnalyticsQuery";
 import { usePoAgingLogic } from "../usePoAgingLogic";
-import type {
-  PoAgingDaysPaginatedResponse,
-  PoAgingFilterState,
-} from "@/types/po-analytics/po-analytics.types";
+import { usePmAnalyticsHooksV2 } from "../usePmAnalyticsQuery";
+import type { PoAgingDuidCardsPaginatedResponse, PoAgingFilterState } from "@/types/po-analytics/po-analytics.types";
 
 export const usePmAnalytics = (userId: string) => {
   // --- UI & Filter State ---
@@ -12,9 +10,7 @@ export const usePmAnalytics = (userId: string) => {
   const [poType, setPoType] = useState("all");
   const [searchDUID, setSearchDUID] = useState("");
   const [searchPONumber, setSearchPONumber] = useState("");
-  const [dateFilterMode, setDateFilterMode] = useState<"all" | "year" | "month" | "day" | "range">(
-    "all",
-  );
+  const [dateFilterMode, setDateFilterMode] = useState<"all" | "year" | "month" | "day" | "range">("all");
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedDay, setSelectedDay] = useState(new Date().getDate());
@@ -24,8 +20,7 @@ export const usePmAnalytics = (userId: string) => {
   const [expandedDUID, setExpandedDUID] = useState<string | null>(null);
   const [expandedPO, setExpandedPO] = useState<string | null>(null);
 
-  // ✅ PRODUCTION FIX: Helper to reset UI state whenever filters change
-  // This replaces the useEffect and fixes the "Avoid calling setState directly within an effect" error.
+  // Helper to reset UI state whenever filters change
   const resetUI = useCallback(() => {
     setExpandedDUID(null);
     setExpandedPO(null);
@@ -72,30 +67,23 @@ export const usePmAnalytics = (userId: string) => {
       rangeStart: dateFilterMode === "range" ? rangeStart : undefined,
       rangeEnd: dateFilterMode === "range" ? rangeEnd : undefined,
       page: 1,
-      take: 20,
+      take: 15, // Aligned with server side batch take sizing
     };
-  }, [
-    userId,
-    poType,
-    searchDUID,
-    searchPONumber,
-    dateFilterMode,
-    selectedYear,
-    selectedMonth,
-    selectedDay,
-    rangeStart,
-    rangeEnd,
-  ]);
+  }, [userId, poType, searchDUID, searchPONumber, dateFilterMode, selectedYear, selectedMonth, selectedDay, rangeStart, rangeEnd]);
 
   // --- Queries ---
-  const { dashboardQuery, listQuery } = usePmAnalyticsHooks(filters);
+  // Ensure your hook internal query handles the V2 parallel pagination call
+  const { dashboardQuery, listQuery } = usePmAnalyticsHooksV2(filters);
+  // const { dashboardQuery, listQuery } = usePmAnalyticsHooks(filters);
 
-  // --- Data Processing ---
-  const flatLines = useMemo(
-    () => listQuery.data?.pages.flatMap((p: PoAgingDaysPaginatedResponse) => p.data) ?? [],
-    [listQuery.data],
-  );
-  const { metrics, groupedByDUID } = usePoAgingLogic(flatLines);
+  // --- Data Processing (🔄 SYNCHRONIZED FOR V2 CARDS) ---
+  // We extract pre-compiled DUID card structures directly from our paginated server pages
+  const preGroupedCards = useMemo(() => {
+    return listQuery.data?.pages.flatMap((p: PoAgingDuidCardsPaginatedResponse) => p.data) ?? [];
+  }, [listQuery.data]);
+
+  // Pass our aggregated backend cards straight to our ultra-lean frontend logic hook
+  const { metrics, groupedByDUID } = usePoAgingLogic(preGroupedCards);
 
   // --- Infinite Scroll ---
   const observer = useRef<IntersectionObserver | null>(null);
@@ -120,13 +108,13 @@ export const usePmAnalytics = (userId: string) => {
       showFilters,
       setShowFilters,
       poType,
-      setPoType: handlePoTypeChange, // Use wrapped setter
+      setPoType: handlePoTypeChange,
       searchDUID,
-      setSearchDUID: handleSearchDUIDChange, // Use wrapped setter
+      setSearchDUID: handleSearchDUIDChange,
       searchPONumber,
-      setSearchPONumber: handleSearchPONumberChange, // Use wrapped setter
+      setSearchPONumber: handleSearchPONumberChange,
       dateFilterMode,
-      setDateFilterMode: handleDateModeChange, // Use wrapped setter
+      setDateFilterMode: handleDateModeChange,
       selectedYear,
       setSelectedYear,
       selectedMonth,

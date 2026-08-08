@@ -1,29 +1,12 @@
 import apiClient from "../auth/axios";
-import type {
-  PoAgingDashboardResponse,
-  PoAgingDaysPaginatedResponse,
-  PoAgingFilterState,
-} from "@/types/po-analytics/po-analytics.types";
+import type { PoAgingDashboardResponse, PoAgingDaysPaginatedResponse, PoAgingDuidCardsPaginatedResponse, PoAgingFilterState } from "@/types/po-analytics/po-analytics.types";
 
 /**
  * Ensures params match the NestJS PoAgingFilterDto
  * Strips empty strings to avoid 400 Validation Errors
  */
 const getCleanParams = (params: PoAgingFilterState) => {
-  const months = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
   let month = params.month;
   if (typeof month === "string" && months.includes(month)) {
@@ -80,6 +63,13 @@ export const fetchPoAgingDashboard = async (params: PoAgingFilterState) => {
 export const fetchPoAgingTable = async (params: PoAgingFilterState) => {
   const { data } = await apiClient.get<PoAgingDaysPaginatedResponse>("/analytics", {
     params: getCleanParams(params),
+  });
+  return data;
+};
+
+export const fetchPmAgingListV2 = async (params: PoAgingFilterState) => {
+  const { data } = await apiClient.get<PoAgingDuidCardsPaginatedResponse>("/pm-analytics/aging-list-v2", {
+    params: { ...getCleanParams(params), page: params.page || 1, take: 15 },
   });
   return data;
 };

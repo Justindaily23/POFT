@@ -2,15 +2,10 @@ import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { useNavigate } from "react-router-dom"; // Add this line
 
 // Utils & Types
 import { fundRequestSchema, type CreateFundRequestInput } from "@/utils/fund-request/schema";
-import {
-  useSearchPOLines,
-  useSubmitFundRequest,
-  useFundRequestHistory,
-} from "@/hooks/fund-request/fundRequest.hooks";
+import { useSearchPOLines, useSubmitFundRequest, useFundRequestHistory } from "@/hooks/fund-request/fundRequest.hooks";
 import type { POLineSearchResponseData } from "@/types/fund-request/fundRequest.type";
 import type { EnhancedError } from "@/types/api/api.types";
 
@@ -26,7 +21,7 @@ export default function PmFundRequestPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const debouncedSearchTerm = useDebouncedValue(searchTerm, 400);
   const [selectedPOLine, setSelectedPOLine] = useState<POLineSearchResponseData | null>(null);
-  const navigate = useNavigate(); // Initialize it here
+  const [lastSubmittedAt, setLastSubmittedAt] = useState<number | null>(null);
 
   const form = useForm<CreateFundRequestInput>({
     resolver: zodResolver(fundRequestSchema),
@@ -67,14 +62,16 @@ export default function PmFundRequestPage() {
 
     submitFundRequest(payload, {
       onSuccess: () => {
+        setLastSubmittedAt(Date.now());
         toast.success("Success", { description: "Fund request submitted successfully!" });
         form.reset();
         setSelectedPOLine(null);
-        navigate("/pm/notifications");
       },
       onError: (error: unknown) => {
         const err = error as EnhancedError;
-        toast.error("Submission Failed", { description: err.message });
+        toast.error("Submission Failed", {
+          description: err.message || "Please review the request details and try again.",
+        });
       },
       onSettled: () => {},
     });
@@ -116,33 +113,21 @@ export default function PmFundRequestPage() {
             <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
               Fund <span className="text-blue-600">Request</span>
             </h1>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-              Stecam Nigeria Operations
-            </p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Stecam Nigeria Operations</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-1 lg:gap-6">
           {/* Left Column: Search */}
           <div className="lg:col-span-4">
-            <POLineSearch
-              searchTerm={searchTerm}
-              setSearchTerm={setSearchTerm}
-              searchResults={searchResults || []}
-              isFetching={isFetching}
-              selectedPOLine={selectedPOLine}
-              handleSelectPO={handleSelectPO}
-            />
+            <POLineSearch searchTerm={searchTerm} setSearchTerm={setSearchTerm} searchResults={searchResults || []} isFetching={isFetching} selectedPOLine={selectedPOLine} handleSelectPO={handleSelectPO} />
           </div>
 
           {/* Right Column: Financials & Form */}
           <div className="lg:col-span-8 space-y-2">
             {selectedPOLine && (
               <>
-                <FinancialOverview
-                  selectedPOLine={selectedPOLine}
-                  requestedAmount={watchedAmount}
-                />
+                <FinancialOverview selectedPOLine={selectedPOLine} requestedAmount={watchedAmount} />
                 {requestHistory && <RequestHistory history={requestHistory} />}
               </>
             )}
@@ -152,6 +137,7 @@ export default function PmFundRequestPage() {
               selectedPOLine={selectedPOLine}
               isPending={isPending}
               isOverLimit={false} // You can calculate this based on watchedAmount if needed
+              lastSubmittedAt={lastSubmittedAt}
               onSubmit={handleSubmit}
             />
           </div>

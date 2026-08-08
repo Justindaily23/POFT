@@ -17,7 +17,7 @@ import type { AppAxiosError } from "@/types/api/api.types";
 // 1. Unified Validation Schema
 const resetPasswordSchema = z
   .object({
-    newPassword: z.string().min(8, "Password must be at least 8 characters"),
+    newPassword: z.string().min(6, "Password must be at least 6 characters"),
     confirmPassword: z.string(),
   })
   .refine((data) => data.newPassword === data.confirmPassword, {
@@ -83,63 +83,31 @@ export default function ResetPasswordPage() {
       <Card className="w-full max-w-100 shadow-xl border-slate-100 rounded-2xl bg-white">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-black text-slate-900">Security Update</CardTitle>
-          <CardDescription className="text-slate-500">
-            Enter a new secure password for your Stecam account.
-          </CardDescription>
+          <CardDescription className="text-slate-500">Enter a new secure password for your Stecam account.</CardDescription>
         </CardHeader>
 
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             {/* New Password Field */}
             <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                New Password
-              </label>
+              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">New Password</label>
               <div className="relative">
-                <Input
-                  {...register("newPassword")}
-                  type={showPassword ? "text" : "password"}
-                  placeholder="••••••••"
-                  className="h-11 rounded-xl border-slate-200"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-3 text-slate-300 hover:text-slate-500"
-                >
+                <Input {...register("newPassword")} type={showPassword ? "text" : "password"} placeholder="••••••••" className="h-11 rounded-xl border-slate-200" />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3 text-slate-300 hover:text-slate-500">
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
-              {errors.newPassword && (
-                <p className="text-[10px] font-bold text-red-500 italic">
-                  {errors.newPassword.message}
-                </p>
-              )}
+              {errors.newPassword && <p className="text-[10px] font-bold text-red-500 italic">{errors.newPassword.message}</p>}
             </div>
 
             {/* Confirm Password Field */}
             <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                Confirm New Password
-              </label>
-              <Input
-                {...register("confirmPassword")}
-                type="password"
-                placeholder="••••••••"
-                className="h-11 rounded-xl border-slate-200"
-              />
-              {errors.confirmPassword && (
-                <p className="text-[10px] font-bold text-red-500 italic">
-                  {errors.confirmPassword.message}
-                </p>
-              )}
+              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">Confirm New Password</label>
+              <Input {...register("confirmPassword")} type="password" placeholder="••••••••" className="h-11 rounded-xl border-slate-200" />
+              {errors.confirmPassword && <p className="text-[10px] font-bold text-red-500 italic">{errors.confirmPassword.message}</p>}
             </div>
 
-            <Button
-              type="submit"
-              disabled={resetMutation.isPending}
-              className="w-full bg-blue-600 hover:bg-blue-700 h-12 font-bold rounded-xl shadow-blue-100"
-            >
+            <Button type="submit" disabled={resetMutation.isPending} className="w-full bg-blue-600 hover:bg-blue-700 h-12 font-bold rounded-xl shadow-blue-100">
               {resetMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Updating Security...

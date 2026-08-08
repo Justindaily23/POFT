@@ -1,10 +1,5 @@
 import apiClient from "@/api/auth/axios";
-import type {
-  AdminFundRequestFilters,
-  ApproveRejectPayload,
-  FundRequestResponseDto,
-  PaginatedFundRequestResponse,
-} from "@/types/fund-request/fundRequest.type";
+import type { AdminFundRequestFilters, ApproveRejectPayload, FundRequestResponseDto, PaginatedFundRequestResponse } from "@/types/fund-request/fundRequest.type";
 import type { CreateFundRequestInput } from "@/utils/fund-request/schema";
 import { handleApiError } from "@/utils/fund-request/apiHelpers";
 
@@ -30,33 +25,26 @@ export const fundRequestApi = {
   },
 
   submitRequest: async (data: CreateFundRequestInput): Promise<FundRequestResponseDto> => {
-    const response = await apiClient.post<FundRequestResponseDto>("/fund-requests/submit", data);
+    try {
+      const response = await apiClient.post<FundRequestResponseDto>("/fund-requests/submit", data);
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  getLineSummary: async (poLineNumber: string): Promise<{ totalApproved: number; contractAmount: number }> => {
+    const response = await apiClient.get<{ totalApproved: number; contractAmount: number }>(`/po-summary/${poLineNumber}`);
     return response.data;
   },
 
-  getLineSummary: async (
-    poLineNumber: string,
-  ): Promise<{ totalApproved: number; contractAmount: number }> => {
-    const response = await apiClient.get<{ totalApproved: number; contractAmount: number }>(
-      `/po-summary/${poLineNumber}`,
-    );
-    return response.data;
-  },
-
-  getRequestsByDuidAndPoLine: async (
-    PoLineId: string,
-    cursor?: string,
-    limit = 10,
-  ): Promise<FundRequestResponseDto[]> => {
-    const response = await apiClient.get<FundRequestResponseDto[]>(
-      `/fund-requests/history/${PoLineId}`,
-      {
-        params: {
-          cursor,
-          limit,
-        },
+  getRequestsByDuidAndPoLine: async (PoLineId: string, cursor?: string, limit = 10): Promise<FundRequestResponseDto[]> => {
+    const response = await apiClient.get<FundRequestResponseDto[]>(`/fund-requests/history/${PoLineId}`, {
+      params: {
+        cursor,
+        limit,
       },
-    );
+    });
     return response.data;
   },
 
@@ -65,12 +53,7 @@ export const fundRequestApi = {
     return response.data;
   },
 
-  approveOrReject: async (
-    fundRequestId: string,
-    action: FundRequestAction,
-    setContractAmount?: number,
-    rejectionReason?: string,
-  ): Promise<FundRequestResponseDto> => {
+  approveOrReject: async (fundRequestId: string, action: FundRequestAction, setContractAmount?: number, rejectionReason?: string, updatedRequestedAmount?: number): Promise<FundRequestResponseDto> => {
     try {
       const payload: Partial<ApproveRejectPayload> = {
         action: action as ApproveRejectPayload["action"],
@@ -78,11 +61,9 @@ export const fundRequestApi = {
 
       if (setContractAmount !== undefined) payload.setContractAmount = setContractAmount;
       if (rejectionReason !== undefined) payload.rejectionReason = rejectionReason;
+      if (updatedRequestedAmount !== undefined) payload.updatedRequestedAmount = updatedRequestedAmount;
 
-      const { data } = await apiClient.patch<FundRequestResponseDto>(
-        `/fund-requests/${fundRequestId}/action`,
-        payload,
-      );
+      const { data } = await apiClient.patch<FundRequestResponseDto>(`/fund-requests/${fundRequestId}/action`, payload);
       return data;
     } catch (error) {
       // ✅ PRODUCTION TIP: Re-throws via handleApiError utility

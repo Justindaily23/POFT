@@ -32,8 +32,7 @@ import { setLogoutHandler, setMaintenanceHandler } from "@/api/auth/axios";
 import type { AuthUser, AxiosMaintenanceError } from "./types/api/api.types";
 
 function App() {
-  const { isAuthenticated, user, isInitialLoading, setAuth, clearAuth, finishLoading } =
-    useAuthStore();
+  const { isAuthenticated, user, isInitialLoading, setAuth, clearAuth, finishLoading } = useAuthStore();
 
   useIdleTimeout(isAuthenticated ? 30 : 0);
 
@@ -64,6 +63,8 @@ function App() {
         finishLoading();
         return;
       }
+
+      tokenService.setToken(token);
 
       try {
         const { userData, accessToken } = await authApi.getCurrentUser();
@@ -96,9 +97,7 @@ function App() {
     return (
       <div className="flex h-screen flex-col items-center justify-center bg-slate-50">
         <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-4" />
-        <p className="font-bold text-[10px] uppercase tracking-widest text-slate-400">
-          Synchronizing Stecam Ops...
-        </p>
+        <p className="font-bold text-[10px] uppercase tracking-widest text-slate-400">Synchronizing Stecam Ops...</p>
       </div>
     );
   }
@@ -106,10 +105,7 @@ function App() {
   return (
     <>
       <Routes>
-        <Route
-          path="/login"
-          element={isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />}
-        />
+        <Route path="/login" element={isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password-recovery" element={<ResetPasswordRecoveryPage />} />
 
@@ -175,11 +171,7 @@ function RoleBasedRedirect({ user }: { user: AuthUser | null }) {
 
   if (user.mustChangePassword) {
     const isPmSide = user.role === "USER";
-    return isPmSide ? (
-      <Navigate to="/pm/profile" replace />
-    ) : (
-      <Navigate to="/reset-password" replace />
-    );
+    return isPmSide ? <Navigate to="/pm/profile" replace /> : <Navigate to="/reset-password" replace />;
   }
 
   switch (user.role) {

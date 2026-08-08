@@ -1,16 +1,12 @@
-import {
-  Form,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormControl,
-  FormMessage,
-} from "@/components/ui/form";
+import { useEffect, useState } from "react";
+import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Landmark, Loader2, AlertCircle } from "lucide-react";
+import { toast } from "sonner";
 import type { UseFormReturn } from "react-hook-form";
 import type { CreateFundRequestInput } from "../../utils/fund-request/schema";
 import type { POLineSearchResponseData } from "../../types/fund-request/fundRequest.type";
@@ -20,25 +16,48 @@ interface Props {
   selectedPOLine: POLineSearchResponseData | null;
   isOverLimit: boolean;
   isPending: boolean;
+  lastSubmittedAt?: number | null;
   onSubmit: (data: CreateFundRequestInput) => void;
 }
 
-export default function FundRequestForm({
-  form,
-  selectedPOLine,
-  isOverLimit,
-  isPending,
-  onSubmit,
-}: Props) {
+export default function FundRequestForm({ form, selectedPOLine, isOverLimit, isPending, lastSubmittedAt, onSubmit }: Props) {
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [pendingData, setPendingData] = useState<CreateFundRequestInput | null>(null);
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    if (!lastSubmittedAt) return;
+    const interval = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, [lastSubmittedAt]);
+
+  const cooldownRemaining = lastSubmittedAt ? Math.max(0, 60 - Math.ceil((now - lastSubmittedAt) / 1000)) : 0;
+  const isCoolingDown = cooldownRemaining > 0;
+
+  const handleReviewSubmit = (data: CreateFundRequestInput) => {
+    if (isCoolingDown) {
+      toast.info("Please wait", { description: `A request was submitted just now. Please wait ${cooldownRemaining}s before creating another one.` });
+      return;
+    }
+
+    setPendingData(data);
+    setShowConfirmModal(true);
+  };
+
+  const confirmSubmission = () => {
+    if (!pendingData || isCoolingDown) return;
+    onSubmit(pendingData);
+    setShowConfirmModal(false);
+    setPendingData(null);
+  };
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={form.handleSubmit(handleReviewSubmit)} className="space-y-4">
         <Card className="border-none shadow-2xl shadow-slate-200/50 rounded-2xl overflow-hidden">
           <div className="h-1.5 bg-linear-to-r from-slate-700 to-slate-900" />
           <CardHeader className="p-4 sm:p-6 pb-4">
-            <CardTitle className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-3">
-              New Fund Request
-            </CardTitle>
+            <CardTitle className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-3">New Fund Request</CardTitle>
           </CardHeader>
 
           <CardContent className="p-4 sm:p-6 pt-0 space-y-5">
@@ -48,24 +67,16 @@ export default function FundRequestForm({
               name="requestedAmount"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-[11px] font-black uppercase text-slate-600 tracking-widest flex items-center gap-2">
-                    Requested Amount (₦) *
-                  </FormLabel>
+                  <FormLabel className="text-[11px] font-black uppercase text-slate-600 tracking-widest flex items-center gap-2">Requested Amount (₦) *</FormLabel>
                   <FormControl>
                     <div className="relative">
                       <Input
                         type="number"
                         inputMode="decimal"
                         placeholder="0.00"
-                        className={`h-16 bg-slate-50 border-2 rounded-xl font-black text-2xl pl-4 pr-4 ${
-                          isOverLimit
-                            ? "border-red-300 text-red-600 focus-visible:ring-red-500"
-                            : "border-slate-200 text-blue-600 focus-visible:ring-blue-500"
-                        }`}
+                        className={`h-16 bg-slate-50 border-2 rounded-xl font-black text-2xl pl-4 pr-4 ${isOverLimit ? "border-red-300 text-red-600 focus-visible:ring-red-500" : "border-slate-200 text-blue-600 focus-visible:ring-blue-500"}`}
                         value={field.value || ""}
-                        onChange={(e) =>
-                          field.onChange(e.target.value === "" ? 0 : Number(e.target.value))
-                        }
+                        onChange={(e) => field.onChange(e.target.value === "" ? 0 : Number(e.target.value))}
                       />
                       {isOverLimit && (
                         <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -77,10 +88,7 @@ export default function FundRequestForm({
                   {isOverLimit && (
                     <p className="text-xs text-red-600 font-semibold mt-1 flex items-center gap-1">
                       <AlertCircle className="h-3 w-3" />
-                      Amount exceeds available balance by ₦
-                      {Math.abs(
-                        (selectedPOLine?.remainingBalance || 0) - (field.value || 0),
-                      ).toLocaleString()}
+                      Amount exceeds available balance by ₦{Math.abs((selectedPOLine?.remainingBalance || 0) - (field.value || 0)).toLocaleString()}
                     </p>
                   )}
                   <FormMessage />
@@ -94,9 +102,7 @@ export default function FundRequestForm({
               name="requestPurpose"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-[11px] font-black uppercase text-slate-600 tracking-widest">
-                    Purpose / Justification *
-                  </FormLabel>
+                  <FormLabel className="text-[11px] font-black uppercase text-slate-600 tracking-widest">Purpose / Justification *</FormLabel>
                   <FormControl>
                     <Textarea
                       placeholder="Describe why you need these funds and how they will be used..."
@@ -118,9 +124,7 @@ export default function FundRequestForm({
                 name="duid"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-[11px] font-black uppercase text-slate-600 tracking-widest">
-                      Site ID (DUID) *
-                    </FormLabel>
+                    <FormLabel className="text-[11px] font-black uppercase text-slate-600 tracking-widest">Site ID (DUID) *</FormLabel>
                     <FormControl>
                       <Input
                         placeholder="e.g., ABJ-5G-001"
@@ -140,9 +144,7 @@ export default function FundRequestForm({
             <div className="pt-2">
               <Button
                 type="submit"
-                disabled={
-                  isPending || (isOverLimit && !(selectedPOLine?.isNegotiationRequired ?? true))
-                }
+                disabled={isPending || isCoolingDown || (isOverLimit && !(selectedPOLine?.isNegotiationRequired ?? true))}
                 className="w-full h-16 rounded-xl bg-linear-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-black text-base shadow-xl shadow-blue-300/50 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isPending ? (
@@ -150,23 +152,62 @@ export default function FundRequestForm({
                 ) : (
                   <>
                     <Landmark className="h-5 w-5 mr-2" />
-                    {selectedPOLine?.isNegotiationRequired
-                      ? "Submit for Negotiation"
-                      : "Submit Request"}
+                    {isCoolingDown ? `Wait ${cooldownRemaining}s` : selectedPOLine?.isNegotiationRequired ? "Submit for Negotiation" : "Submit Request"}
                   </>
                 )}
               </Button>
 
-              {!selectedPOLine && (
-                <p className="text-xs text-slate-500 text-center mt-3">
-                  💡 Search for a site above to auto-fill details, or enter DUID manually for new
-                  projects
-                </p>
-              )}
+              {!selectedPOLine && <p className="text-xs text-slate-500 text-center mt-3">💡 Search for a site above to auto-fill details, or enter DUID manually for new projects</p>}
             </div>
           </CardContent>
         </Card>
       </form>
+
+      <Dialog open={showConfirmModal} onOpenChange={setShowConfirmModal}>
+        <DialogContent aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle>Confirm Fund Request</DialogTitle>
+            <DialogDescription>Please review the request details before submitting. This action creates a financial request for review.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 text-sm text-slate-600">
+            {isCoolingDown && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs font-medium text-amber-700">A request was submitted just now. Please wait {cooldownRemaining}s before creating another one.</div>}
+            <div className="rounded-lg bg-slate-50 p-3 space-y-2">
+              <p>
+                <span className="font-semibold text-slate-700">DUID:</span> {selectedPOLine?.duid || form.getValues("duid") || "N/A"}
+              </p>
+              <p>
+                <span className="font-semibold text-slate-700">PO Number:</span> {selectedPOLine?.poNumber || form.getValues("poNumber") || "N/A"}
+              </p>
+              <p>
+                <span className="font-semibold text-slate-700">PO Line:</span> {selectedPOLine?.poLineNumber || form.getValues("poLineNumber") || "N/A"}
+              </p>
+              <p>
+                <span className="font-semibold text-slate-700">PM:</span> {selectedPOLine?.pm || form.getValues("pm") || "N/A"}
+              </p>
+              <p>
+                <span className="font-semibold text-slate-700">Description:</span> {selectedPOLine?.itemDescription || form.getValues("itemDescription") || "N/A"}
+              </p>
+              <p>
+                <span className="font-semibold text-slate-700">PO Amount:</span> ₦{(selectedPOLine?.poLineAmount ?? 0).toLocaleString()}
+              </p>
+              <p>
+                <span className="font-semibold text-slate-700">Requested Amount:</span> ₦{(pendingData?.requestedAmount ?? 0).toLocaleString()}
+              </p>
+              <p>
+                <span className="font-semibold text-slate-700">Purpose:</span> {pendingData?.requestPurpose || "N/A"}
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowConfirmModal(false)}>
+              Edit
+            </Button>
+            <Button onClick={confirmSubmission} disabled={isPending || isCoolingDown}>
+              {isPending ? <Loader2 className="animate-spin h-4 w-4" /> : isCoolingDown ? `Wait ${cooldownRemaining}s` : "Submit Request"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Form>
   );
 }

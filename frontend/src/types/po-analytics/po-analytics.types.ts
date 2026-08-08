@@ -22,6 +22,11 @@ export interface PoAgingDaysPaginatedResponse {
   nextCursor: string | null; // The ID of the last item for the next fetch
 }
 
+export interface PoAgingDuidCardsPaginatedResponse {
+  data: DuidGroupDto[];
+  nextCursor: string | null;
+}
+
 export interface PoAgingKpiDto {
   invoicedPOs: number;
   notInvoicedPOs: number;
@@ -29,27 +34,43 @@ export interface PoAgingKpiDto {
   avgPoAgingDays: number;
   totalPOLines: number;
   criticalAgedPos: number;
+  totalPoAmount?: number;
+  totalContractAmount?: number;
+  totalApprovedAmount?: number;
+  totalRemainingBalance?: number;
 }
 
 export interface DuidGroupDto {
   duid: string;
+  pm: string;
   projectCode: string;
   projectName: string;
+  prNumber: string;
+  poNumber: string;
   pos: PoGroupDto[];
   totalLines: number;
   totalInvoiced: number;
   totalNotInvoiced: number;
   maxDaysOpen: number;
   worstAgingFlag: PoAgingFlag;
+  totalPoAmount: number;
+  totalContractAmount: number;
+  totalApprovedAmount: number;
+  totalRemainingBalance: number;
 }
 
 export interface PoGroupDto {
   poNumber: string;
+  pm: string;
   lines: PoAgingLineDto[];
   invoicedCount: number;
   notInvoicedCount: number;
   maxDaysOpen: number;
   worstAgingFlag: PoAgingFlag;
+  totalPoAmount: number;
+  totalContractAmount: number;
+  totalApprovedAmount: number;
+  totalRemainingBalance: number;
 }
 
 export interface PoAgingLineDto {
@@ -71,6 +92,11 @@ export interface PoAgingLineDto {
   itemCode: string;
   itemDescription: string;
   poInvoiceStatus: PoLineStatus;
+  poLineAmount: number;
+  contractAmount: number;
+  totalRequestedAmount: number;
+  totalApprovedAmount: number;
+  remainingBalance: number;
 }
 export interface PaginationState {
   page: number;

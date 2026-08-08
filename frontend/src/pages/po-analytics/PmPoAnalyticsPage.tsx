@@ -13,12 +13,7 @@ const PmPoAnalyticsPage: React.FC = () => {
   const { user, isInitialLoading } = useAuthStore();
   const { state, queries, data } = usePmAnalytics(user?.id ?? "");
 
-  if (isInitialLoading)
-    return (
-      <div className="p-10 text-center animate-pulse font-black text-slate-300 uppercase">
-        Authenticating...
-      </div>
-    );
+  if (isInitialLoading) return <div className="p-10 text-center animate-pulse font-black text-slate-300 uppercase">Authenticating...</div>;
   if (!user) return <div className="p-10 text-center font-bold text-red-400">Session expired.</div>;
 
   return (
@@ -26,14 +21,17 @@ const PmPoAnalyticsPage: React.FC = () => {
       {/* Header - Identical Styling */}
       <div className="px-5 pt-4">
         <h1 className="text-xl font-black text-slate-900 tracking-tight">PO Analytics</h1>
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-          Scoped: {toTitleCase(user.name)}
-        </p>
+        <p className="text-[10px] font-bold text-slate-700 uppercase tracking-widest">PM: {toTitleCase(user.name)}</p>
       </div>
 
       <PoAgingKpis
-        metrics={data.metrics}
-        loading={queries.dashboardQuery.isLoading || queries.listQuery.isLoading}
+        metrics={{
+          invoicedPOs: queries.dashboardQuery.data?.kpis?.invoicedPOs ?? 0,
+          notInvoicedPOs: queries.dashboardQuery.data?.kpis?.notInvoicedPOs ?? 0,
+          invoiceRate: queries.dashboardQuery.data?.kpis?.invoiceRate ?? 0,
+          avgPoAgingDays: queries.dashboardQuery.data?.kpis?.avgPoAgingDays ?? 0,
+        }}
+        loading={queries.dashboardQuery.isLoading}
       />
 
       <div className="sticky top-0 z-40 bg-[#F8FAFC]/90 backdrop-blur-md border-b border-slate-100">
@@ -41,11 +39,7 @@ const PmPoAnalyticsPage: React.FC = () => {
       </div>
 
       <div className="px-4 mt-4 space-y-4 flex-1">
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
-          {queries.listQuery.isLoading
-            ? "Initializing..."
-            : `Active Projects: ${data.groupedByDUID.length}`}
-        </p>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{queries.listQuery.isLoading ? "Initializing..." : `Active Projects: ${data.groupedByDUID.length}`}</p>
 
         {queries.listQuery.isLoading ? (
           <SkeletonLoader />
@@ -57,9 +51,7 @@ const PmPoAnalyticsPage: React.FC = () => {
               key={group.duid}
               duidGroup={group}
               isExpanded={state.expandedDUID === group.duid}
-              onToggle={() =>
-                state.setExpandedDUID(state.expandedDUID === group.duid ? null : group.duid)
-              }
+              onToggle={() => state.setExpandedDUID(state.expandedDUID === group.duid ? null : group.duid)}
               expandedPO={state.expandedPO}
               onTogglePO={(po) => state.setExpandedPO(state.expandedPO === po ? null : po)}
             />
@@ -67,16 +59,9 @@ const PmPoAnalyticsPage: React.FC = () => {
         )}
 
         {/* Fixed Callback Ref for Infinite Scroll */}
-        <div
-          ref={(node) => data.lastElementRef(node)}
-          className="py-10 flex flex-col items-center justify-center gap-3"
-        >
+        <div ref={(node) => data.lastElementRef(node)} className="py-10 flex flex-col items-center justify-center gap-3">
           {queries.listQuery.isFetchingNextPage && <Spinner />}
-          {!queries.listQuery.hasNextPage && data.groupedByDUID.length > 0 && (
-            <p className="text-[10px] font-bold text-slate-300 uppercase italic">
-              Financial Data Synced
-            </p>
-          )}
+          {!queries.listQuery.hasNextPage && data.groupedByDUID.length > 0 && <p className="text-[10px] font-bold text-slate-300 uppercase italic">Financial Data Synced</p>}
         </div>
       </div>
     </div>

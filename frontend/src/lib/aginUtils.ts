@@ -27,8 +27,8 @@ export const getAgingStatus = (flag: string) => {
 export const formatDate = (date: Date | string | null | undefined) => {
   if (!date) return "Pending";
   return new Date(date).toLocaleDateString("en-US", {
-    month: "short",
     day: "numeric",
+    month: "short",
     year: "numeric",
   });
 };

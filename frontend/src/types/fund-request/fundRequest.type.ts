@@ -114,6 +114,7 @@ export type ApproveRejectPayload = {
   action: FundRequestAction;
   setContractAmount?: number;
   rejectionReason?: string;
+  updatedRequestedAmount?: number;
 };
 
 export interface PaginatedFundRequestResponse {
