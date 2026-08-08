@@ -28,6 +28,7 @@ export interface FinancialMetrics {
   totalAmountRequested: number;
   totalAmountRejected: number;
   totalAmountSpent: number;
+  totalInvoicedAmount: number;
   balanceDue: number;
 }
 

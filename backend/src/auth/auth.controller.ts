@@ -21,6 +21,7 @@ import { logger } from 'src/common/logger/logger';
 import { RolesGuard } from './guards/roles.guard';
 import { AuthRole } from '@prisma/client';
 import { Roles } from './decorators/roles.decorator';
+import { SkipPasswordCheck } from './decorators/skip-password-check.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -51,7 +52,8 @@ export class AuthController {
       mustChangePassword: req.user.mustChangePassword ?? false,
     };
 
-    return this.authService.login(authUser, res, userAgent, ip, deviceId);
+    const result = await this.authService.login(authUser, res, userAgent, ip, deviceId);
+    return result;
   }
 
   @Post('logout')
@@ -65,7 +67,7 @@ export class AuthController {
     const deviceId = cookies?.deviceId ?? 'unknown_device';
 
     const result = await this.authService.logout(userId, deviceId, res);
-    return res.status(200).json(result);
+    return res.status(200).json({ message: result.message });
   }
 
   @Post('refresh')
@@ -87,7 +89,8 @@ export class AuthController {
     }
 
     // Now TypeScript is happy because we verified they are not undefined
-    return this.authService.refresh(refreshToken, deviceId, res, userAgent, ip);
+    const result = await this.authService.refresh(refreshToken, deviceId, res, userAgent, ip);
+    return res.status(201).json(result);
   }
 
   @Post('logout-all')
@@ -96,11 +99,12 @@ export class AuthController {
   async logoutAll(@Req() req: RequestWithUser, @Res() res: Response) {
     const userId = req.user.id;
     const result = await this.authService.logoutAllDevices(userId, res);
-    return res.status(200).json(result);
+    return res.status(200).json({ message: result.message });
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(AuthRole.ADMIN, AuthRole.SUPER_ADMIN, AuthRole.USER)
+  @SkipPasswordCheck()
   @Post('reset-password')
   async resetPassword(@Req() req: RequestWithUser, @Body() dto: ResetPasswordDto) {
     const userId = req.user.id;

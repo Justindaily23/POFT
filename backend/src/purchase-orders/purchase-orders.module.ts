@@ -3,8 +3,9 @@ import { PoImportService } from './import/po-import.service';
 import { PoImportController } from './import/po-import.controller';
 import { PurchaseOrdersService } from './purchase-orders.service';
 import { PurchaseOrdersController } from './purchase-orders.controller';
-import { BullModule } from '@nestjs/bull';
+import { BullModule } from '@nestjs/bullmq';
 import { PoImportProcessor } from './import/po-import.processor';
+import { PoLineFinancialService } from '@/common/financial/po-line-financial.service';
 
 @Module({
   imports: [
@@ -14,7 +15,7 @@ import { PoImportProcessor } from './import/po-import.processor';
     }),
   ],
   controllers: [PoImportController, PurchaseOrdersController],
-  providers: [PoImportService, PurchaseOrdersService, PoImportProcessor],
+  providers: [PoImportService, PurchaseOrdersService, PoImportProcessor, PoLineFinancialService],
   exports: [PoImportService],
 })
 export class PurchaseOrdersModule {}

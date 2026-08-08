@@ -25,13 +25,14 @@ export class FundRequestRepository {
         };
       },
 
-      async approveFundRequest(requestId: string, adminId: string) {
+      async approveFundRequest(requestId: string, adminId: string, updatedRequestedAmount?: Prisma.Decimal) {
         return tx.fundRequest.update({
           where: { id: requestId },
           data: {
             status: FundRequestStatus.APPROVED,
             approvedBy: adminId,
             approvedAt: new Date(),
+            requestedAmount: updatedRequestedAmount ?? undefined,
           },
           include: { purchaseOrderLine: { include: { purchaseOrder: true } } },
         });

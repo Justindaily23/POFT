@@ -79,6 +79,43 @@ describe('PO Analytics & PM Dashboard E2E', () => {
     // 2. Close the utility connection used for cleaning/seeding
     await disconnectUtilPrisma();
   }, 30000);
+  it('returns financial analytics for the scoped PM dashboard', async () => {
+    const po = await prisma.purchaseOrder.create({
+      data: { duid: 'D-002', poNumber: 'PO-FIN-001', projectName: 'Finance Test' },
+    });
+
+    await prisma.purchaseOrderLine.create({
+      data: {
+        purchaseOrderId: po.id,
+        pmId: pmStaffId,
+        pm: 'John PM',
+        poLineNumber: '1',
+        poLineAmount: 10000,
+        contractAmount: 12000,
+        totalApprovedAmount: 4000,
+        remainingBalance: 8000,
+        totalRequestedAmount: 5000,
+        poLineStatus: PoLineStatus.NOT_INVOICED,
+        poIssuedDate: new Date(),
+        allowedOpenDays: 10,
+        agingFlag: PoAgingFlag.GREEN,
+      },
+    });
+
+    const response = await request(app.getHttpServer())
+      .get('/pm-analytics/dashboard')
+      .set('Authorization', pmToken)
+      .expect(200);
+
+    expect(response.body.kpis.totalPoAmount).toBe(10000);
+    expect(response.body.kpis.totalContractAmount).toBe(12000);
+    expect(response.body.kpis.totalApprovedAmount).toBe(4000);
+    expect(response.body.kpis.totalRemainingBalance).toBe(8000);
+    expect(response.body.duids[0].pos[0].lines[0].contractAmount).toBe(12000);
+    expect(response.body.duids[0].pos[0].lines[0].totalApprovedAmount).toBe(4000);
+    expect(response.body.duids[0].pos[0].lines[0].remainingBalance).toBe(8000);
+  });
+
   it('aggregates dashboard data and heals status to RED in the background', async () => {
     const notificationsService = app.get(NotificationsService);
     const notifySpy = jest.spyOn(notificationsService, 'notify');

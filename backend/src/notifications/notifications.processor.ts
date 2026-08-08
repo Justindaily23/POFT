@@ -1,5 +1,5 @@
-import { Process, Processor } from '@nestjs/bull';
-import { Job } from 'bull';
+import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Job } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { logger } from 'src/common/logger/logger';
 import { EmailTemplates } from './templates/email-templates';
@@ -7,11 +7,13 @@ import { NotificationMapping } from './types/notification-payload.interface';
 import { MailerService } from '@nestjs-modules/mailer';
 
 @Processor('notifications')
-export class NotificationsProcessor {
+export class NotificationsProcessor extends WorkerHost {
   constructor(
     private prisma: PrismaService,
     private readonly mailerService: MailerService,
-  ) {}
+  ) {
+    super();
+  }
 
   /**
    * 2. TYPE-SAFE DISPATCHER
@@ -32,8 +34,7 @@ export class NotificationsProcessor {
     return typedBuilder(payload as NotificationMapping[K]);
   }
 
-  @Process('send-notification')
-  async handleNotification(job: Job<{ notificationId: string }>) {
+  async process(job: Job<{ notificationId: string }>) {
     const { notificationId } = job.data;
 
     // 1. Fetch notification and include user relation for the email address

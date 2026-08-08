@@ -8,8 +8,8 @@ import { createTestApp } from '../setup/test-app';
 import { loginAsAdmin } from '../auth/auth.helper';
 import { cleanDatabase, disconnectUtilPrisma, prisma as utilPrisma } from '../utils/database.util';
 import { createPoExcelBuffer } from '../utils/excel.util';
-import { getQueueToken } from '@nestjs/bull';
-import { Queue } from 'bull';
+import { getQueueToken } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 jest.setTimeout(60000);
 
 describe('PO Excel Import (E2E)', () => {
@@ -28,7 +28,7 @@ describe('PO Excel Import (E2E)', () => {
       // 1. Force the Bull-to-Upstash connection to close
       const queue = app.get<Queue>(getQueueToken('po-imports'));
       if (queue) {
-        await queue.pause(true);
+        await queue.pause();
         await queue.close();
       }
     } catch (err) {

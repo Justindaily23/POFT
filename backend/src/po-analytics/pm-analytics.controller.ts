@@ -6,14 +6,17 @@ import { AuthRole } from '@prisma/client'; // Use your Prisma AuthRole
 import { PoAnalyticsService } from './po-analytics.service';
 import { PoAgingFilterDto } from './dto/po-filter.dto';
 import { RequestWithUser } from 'src/common/interfaces/request-with-user.interface';
-import { PoAgingDashboardResponse, PoAgingDaysPaginatedResponse } from './po-analytics-types/poAgingDaysResponse.type';
+import {
+  PoAgingDashboardResponse,
+  PoAgingDaysPaginatedResponse,
+  PoAgingDuidCardsPaginatedResponse,
+} from './po-analytics-types/poAgingDaysResponse.type';
 
 @Controller('pm-analytics')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(AuthRole.USER) // Scoped to Project Managers (USER role in your schema)
 export class PmAnalyticsController {
   constructor(private readonly poAnalyticsService: PoAnalyticsService) {}
-
   /**
    * MOBILE KPI DASHBOARD (Bento Grid Data)
    * Automatically scoped to the logged-in PM's staffId
@@ -28,14 +31,16 @@ export class PmAnalyticsController {
 
     return {
       kpis: {
-        invoicedPOs: dashboard.kpis.invoicedPOs,
-        notInvoicedPOs: dashboard.kpis.notInvoicedPOs,
+        totalPOs: dashboard.kpis.totalPOs, // ✅ ADDED: Unique count of POs
+        invoicedPOs: dashboard.kpis.invoicedPOs, // ✅ KEPT: Workflow tracking
+        notInvoicedPOs: dashboard.kpis.notInvoicedPOs, // ✅ KEPT: Workflow tracking
         invoiceRate: dashboard.kpis.invoiceRate,
-        avgPoAgingDays: dashboard.kpis.avgPoAgingDays,
-        totalPOLines: dashboard.kpis.totalPOLines, // ✅ Added for DTO completeness
+        avgPoAgingDays: dashboard.kpis.avgPoAgingDays, // ✅ KEPT: Aging metric
+        totalPOLines: dashboard.kpis.totalPOLines,
+        criticalAgedPos: dashboard.kpis.criticalAgedPos,
+        // ✂️ REMOVED: Financial totals have been stripped out from global metrics
       },
-      duids: dashboard.duids,
-      // 🛡️ THE FIX: Pass the critical projects from the service to the frontend
+      duids: dashboard.duids, // ✅ PERFECT: Card items still hold their internal financial totals safely!
       topCriticalProjects: dashboard.topCriticalProjects || [],
       nextCursor: null,
     };
@@ -54,5 +59,22 @@ export class PmAnalyticsController {
     filters.take = filters.take ? Number(filters.take) : 20;
 
     return await this.poAnalyticsService.getAllPoAgingDays(filters, req.user.id);
+  }
+
+  /**
+   * 🌟 PARALLEL TEST ROUTE (New Pre-Grouped Hierarchical Card Method)
+   * Prevents jumping status severities mid-scroll on the frontend.
+   * Hit this via: GET /pm-analytics/aging-list-v2
+   */
+  @Get('aging-list-v2')
+  @HttpCode(HttpStatus.OK)
+  async getPmAgingListV2(
+    @Req() req: RequestWithUser,
+    @Query() filters: PoAgingFilterDto,
+  ): Promise<PoAgingDuidCardsPaginatedResponse> {
+    filters.page = filters.page ? Number(filters.page) : 1;
+    filters.take = filters.take ? Number(filters.take) : 15;
+
+    return await this.poAnalyticsService.getPaginatedDuidCards(filters, req.user.id);
   }
 }

@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -12,52 +6,36 @@ datasource db {
   provider = "postgresql"
 }
 
-// ===========USER AUTHENTICATION AND AUTHORIZATION MODEL/ ROLE BASED ACCESS CONTROL ===========
-
-enum AuthRole {
-  SUPER_ADMIN
-  ADMIN
-  USER
-}
-
 model StaffRole {
-  id        String   @id @default(uuid())
-  code      String   @unique // MD, PM, SE
-  name      String
-  createdAt DateTime @default(now())
-
+  id           String         @id @default(uuid())
+  code         String         @unique
+  name         String
+  createdAt    DateTime       @default(now())
   staffProfile StaffProfile[]
 
   @@index([name])
 }
 
 model State {
-  id   String @id @default(uuid())
-  code String @unique // ABJ, LAG
-  name String
-
+  id            String         @id @default(uuid())
+  code          String         @unique
+  name          String
   staffProfiles StaffProfile[]
 
   @@index([name])
 }
 
 model StaffProfile {
-  id String @id @default(uuid())
-
-  userId String @unique
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  staffId String @unique // STC-PM-ABJ-00012
-
-  roleId String
-  role   StaffRole @relation(fields: [roleId], references: [id])
-
-  stateId String
-  state   State  @relation(fields: [stateId], references: [id])
-
-  isActive Boolean @default(true)
-
-  createdAt DateTime @default(now())
+  id        String    @id @default(uuid())
+  userId    String    @unique
+  staffId   String    @unique
+  roleId    String
+  stateId   String
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  role      StaffRole @relation(fields: [roleId], references: [id])
+  state     State     @relation(fields: [stateId], references: [id])
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([staffId])
   @@index([roleId])
@@ -66,38 +44,34 @@ model StaffProfile {
 
 model StaffIdSequence {
   id        String @id @default(uuid())
-  company   String // STC
-  roleCode  String // PM
-  stateCode String // ABJ
+  company   String
+  roleCode  String
+  stateCode String
   lastValue Int    @default(0)
 
   @@unique([company, roleCode, stateCode])
 }
 
 model User {
-  id                 String  @id @default(uuid())
-  email              String  @unique
-  fullName           String
-  phoneNumber        String?
-  password           String
-  isActive           Boolean @default(true)
-  mustChangePassword Boolean @default(true)
-  tokenVersion       Int    @default(1) // for invalidating refresh tokens on password change or logout
-
+  id                   String               @id @default(uuid())
+  email                String               @unique
+  fullName             String
+  phoneNumber          String?
+  password             String
+  isActive             Boolean              @default(true)
+  mustChangePassword   Boolean              @default(true)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  role                 AuthRole             @default(USER)
+  tokenVersion         Int                  @default(1)
+  fundRequestsApproved FundRequest[]        @relation("FundRequestApprovedBy")
+  fundRequestsRejected FundRequest[]        @relation("FundRequestRejectedBy")
+  fundRequestsCreated  FundRequest[]        @relation("FundRequestRequestedBy")
+  fundRequestHistory   FundRequestHistory[]
   notifications        Notification[]
-  role                 AuthRole         @default(USER)
+  passwordResetTokens  PasswordResetToken?
   refreshSessions      RefreshSession[]
   staffProfiles        StaffProfile?
-  // === Reverse relations ===
-  fundRequestsCreated  FundRequest[]    @relation("FundRequestRequestedBy")
-  fundRequestsApproved FundRequest[]    @relation("FundRequestApprovedBy")
-  fundRequestsRejected FundRequest[]    @relation("FundRequestRejectedBy")
-  fundRequestHistory   FundRequestHistory[]
-  passwordResetTokens PasswordResetToken[]
-
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 
   @@index([fullName])
   @@index([email])
@@ -105,19 +79,18 @@ model User {
 }
 
 model RefreshSession {
-  id           String    @id @default(uuid())
-  userId       String
-  refreshToken String // hashed refresh token
-  previousRefreshToken  String?   // hashed PREVIOUS refresh token <--- ADD THIS
-  rotatedAt             DateTime  @default(now()) 
-  deviceId     String
-  userAgent    String
-  ipAddress    String
-  createdAt    DateTime  @default(now())
-  expiresAt    DateTime
-  revokedAt    DateTime?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                   String    @id @default(uuid())
+  userId               String
+  refreshToken         String
+  deviceId             String
+  userAgent            String
+  ipAddress            String
+  createdAt            DateTime  @default(now())
+  expiresAt            DateTime
+  revokedAt            DateTime?
+  previousRefreshToken String?
+  rotatedAt            DateTime  @default(now())
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, deviceId])
   @@index([deviceId, expiresAt])
@@ -125,34 +98,25 @@ model RefreshSession {
 
 model PasswordResetToken {
   id        String   @id @default(uuid())
-  userId    String
-  token     String   @unique // This will store the hashed token
+  userId    String   @unique
+  token     String   @unique
   expiresAt DateTime
   createdAt DateTime @default(now())
-
-  // Cascade delete ensures tokens are removed if a user is deleted
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([token])
-  @@unique([userId])
 }
 
-
-// ============================== PO Management Schema =============================
 model PurchaseOrder {
-  id   String @id @default(uuid())
-  duid String
-
+  id          String              @id @default(uuid())
+  duid        String
   projectName String?
   projectCode String?
-
-  prNumber String?
-  poNumber String?
-
-  poLines PurchaseOrderLine[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  prNumber    String?
+  poNumber    String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  poLines     PurchaseOrderLine[]
 
   @@unique([duid, poNumber])
   @@index([duid])
@@ -161,55 +125,37 @@ model PurchaseOrder {
   @@index([projectCode])
 }
 
-enum PoAgingFlag {
-  GREEN
-  WARNING
-  RED
-}
-
 model PurchaseOrderLine {
-  id              String @id @default(uuid())
-  purchaseOrderId String
-
-  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
-
-  poLineNumber String?
-  pm           String?
-  pmId         String? 
-
-  itemCode        String?
-  itemDescription String?
-
-  poTypeId String?
-  poType   PoType? @relation(fields: [poTypeId], references: [id])
-
-  unitPrice         Decimal?  @db.Decimal(15, 2)
-  requestedQuantity Int?
-  poLineAmount      Decimal?  @db.Decimal(15, 2)
-  poIssuedDate      DateTime?
-
-  poInvoiceDate   DateTime?
-  allowedOpenDays Int?
-
-  //=======FINANCIAL CONTROL
-  contractAmount      Decimal? @db.Decimal(15, 2)
-  totalRequestedAmount Decimal @default(0) @db.Decimal(15, 2)
-  totalRejectedAmount Decimal  @default(0) @db.Decimal(15, 2)
-  totalApprovedAmount Decimal  @default(0) @db.Decimal(15, 2)
-  remainingBalance    Decimal  @default(0) @db.Decimal(15, 2)
-
-  poLineStatus PoLineStatus @default(NOT_INVOICED)
-
-  agingFlag             PoAgingFlag  @default(GREEN)
+  id                    String               @id @default(uuid())
+  purchaseOrderId       String
+  poLineNumber          String?
+  itemCode              String?
+  itemDescription       String?
+  poTypeId              String?
+  unitPrice             Decimal?             @db.Decimal(15, 2)
+  requestedQuantity     Int?
+  poLineAmount          Decimal?             @db.Decimal(15, 2)
+  contractAmount        Decimal?             @db.Decimal(15, 2)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  poLineStatus          PoLineStatus         @default(NOT_INVOICED)
+  remainingBalance      Decimal              @default(0) @db.Decimal(15, 2)
+  totalApprovedAmount   Decimal              @default(0) @db.Decimal(15, 2)
+  agingFlag             PoAgingFlag          @default(GREEN)
+  allowedOpenDays       Int?
   lastAgingNotifiedFlag PoAgingFlag?
-
-  FundRequests       FundRequest[]
-  ContractAmendments ContractAmendment[]
-  version             Int      @default(0) // contract amendment tracking to prevent data corruption when two people try to edit the same thing at the exact same time 
-  fundRequestHistory FundRequestHistory[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  poInvoiceDate         DateTime?
+  pm                    String?
+  poIssuedDate          DateTime?
+  pmId                  String?
+  totalRejectedAmount   Decimal              @default(0) @db.Decimal(15, 2)
+  totalRequestedAmount  Decimal              @default(0) @db.Decimal(15, 2)
+  version               Int                  @default(0)
+  ContractAmendments    ContractAmendment[]
+  FundRequests          FundRequest[]
+  fundRequestHistory    FundRequestHistory[]
+  poType                PoType?              @relation(fields: [poTypeId], references: [id])
+  purchaseOrder         PurchaseOrder        @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
 
   @@unique([purchaseOrderId, poLineNumber])
   @@index([purchaseOrderId])
@@ -226,109 +172,145 @@ model PurchaseOrderLine {
   @@index([poLineStatus, allowedOpenDays])
 }
 
-//==PO LINE LIFE CYCLE STATUS===
-enum PoLineStatus {
-  NOT_INVOICED
-  INVOICED
-}
-
 model PoType {
-  id          String  @id @default(uuid())
-  code        String  @unique
-  name        String
-  description String?
-
+  id             String              @id @default(uuid())
+  code           String              @unique
+  name           String
+  description    String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
   purchaseOrders PurchaseOrderLine[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 
   @@index([name, code])
 }
 
-// ================PURCHASE ORDER IMPORT HISTORY
 model PoImportHistory {
-  id          String @id @default(uuid())
+  id          String   @id @default(uuid())
   fileName    String
-    fileHash    String   @unique 
-
   duidCount   Int
   poCount     Int
   poLineCount Int
-  status      String // e.g. "SUCCESS", "PARTIAL", "FAILED"
-  errors      Json? // JSON string or text for errors
-
-  createdBy String? // optional userId
-  createdAt DateTime @default(now())
+  status      String
+  errors      Json?
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  fileHash    String   @unique
 
   @@index([status])
   @@index([createdAt])
   @@index([fileHash])
 }
 
-// ============ FUND REQUESTS ============
-
 model FundRequest {
-  id                  String @id @default(uuid())
+  id                  String               @id @default(uuid())
   purchaseOrderLineId String
-
-  purchaseOrderLine PurchaseOrderLine @relation(fields: [purchaseOrderLineId], references: [id], onDelete: Cascade)
-
-  requestedAmount Decimal @db.Decimal(15, 2)
-
-  // Intent / reason for this specific fund request
-  requestPurpose String
-  source FundRequestSource @default(STRUCTURED)
-
-  status FundRequestStatus @default(PENDING)
-
-  requestedBy     String
-  requestedByUser User   @relation("FundRequestRequestedBy", fields: [requestedBy], references: [id])
-
-  approvedBy     String?
-  approvedByUser User?   @relation("FundRequestApprovedBy", fields: [approvedBy], references: [id])
-
-  rejectedBy     String?
-  rejectedByUser User?    @relation("FundRequestRejectedBy", fields: [rejectedBy], references: [id])
-
-  approvedAt      DateTime?
-  rejectedAt      DateTime?
-  rejectionReason String?
-
-  createdAt DateTime @default(now())
-
-  notifications Notification[]
+  requestedAmount     Decimal              @db.Decimal(15, 2)
+  requestPurpose      String
+  status              FundRequestStatus    @default(PENDING)
+  requestedBy         String
+  approvedBy          String?
+  approvedAt          DateTime?
+  rejectionReason     String?
+  createdAt           DateTime             @default(now())
+  source              FundRequestSource    @default(STRUCTURED)
+  rejectedBy          String?
+  rejectedAt          DateTime?
+  approvedByUser      User?                @relation("FundRequestApprovedBy", fields: [approvedBy], references: [id])
+  purchaseOrderLine   PurchaseOrderLine    @relation(fields: [purchaseOrderLineId], references: [id], onDelete: Cascade)
+  rejectedByUser      User?                @relation("FundRequestRejectedBy", fields: [rejectedBy], references: [id])
+  requestedByUser     User                 @relation("FundRequestRequestedBy", fields: [requestedBy], references: [id])
   fundRequestsHistory FundRequestHistory[]
+  notifications       Notification[]
 
   @@index([purchaseOrderLineId])
   @@index([status])
   @@index([requestedBy])
   @@index([status, createdAt(sort: Desc)])
   @@index([requestedBy, createdAt(sort: Desc)])
-
 }
 
 model FundRequestHistory {
-  id                  String         @id @default(cuid())
-  fundRequestId       String
-  purchaseOrderLineId String
-  requestedBy         String
-  requestedAmount     Decimal
-  requestPurpose      String
-  status              FundRequestStatus
-  createdAt           DateTime       @default(now())
-  updatedAt           DateTime       @updatedAt
-
-  // Relations
-  fundRequest         FundRequest    @relation(fields: [fundRequestId], references: [id], onDelete: Cascade)
-  purchaseOrderLine   PurchaseOrderLine @relation(fields: [purchaseOrderLineId], references: [id], onDelete: Cascade)
-  user                User           @relation(fields: [requestedBy], references: [id], onDelete: Cascade)
+  id                       String            @id @default(cuid())
+  fundRequestId            String
+  purchaseOrderLineId      String
+  requestedBy              String
+  requestedAmount          Decimal           @db.Decimal(15, 2)
+  requestPurpose           String
+  status                   FundRequestStatus
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+  snapshotContractAmount   Decimal           @db.Decimal(15, 2)
+  snapshotRemainingBalance Decimal           @db.Decimal(15, 2)
+  snapshotTotalApproved    Decimal           @db.Decimal(15, 2)
+  snapshotTotalRejected    Decimal           @db.Decimal(15, 2)
+  fundRequest              FundRequest       @relation(fields: [fundRequestId], references: [id], onDelete: Cascade)
+  purchaseOrderLine        PurchaseOrderLine @relation(fields: [purchaseOrderLineId], references: [id], onDelete: Cascade)
+  user                     User              @relation(fields: [requestedBy], references: [id], onDelete: Cascade)
 
   @@index([fundRequestId])
   @@index([purchaseOrderLineId])
   @@index([requestedBy])
 }
 
+model ContractAmendment {
+  id                  String            @id @default(uuid())
+  purchaseOrderLineId String
+  oldAmount           Decimal           @db.Decimal(15, 2)
+  newAmount           Decimal           @db.Decimal(15, 2)
+  reason              String
+  approvedBy          String
+  createdAt           DateTime          @default(now())
+  purchaseOrderLine   PurchaseOrderLine @relation(fields: [purchaseOrderLineId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseOrderLineId])
+}
+
+model Notification {
+  id            String           @id @default(uuid())
+  userId        String
+  fundRequestId String?
+  type          NotificationType
+  payload       Json
+  sentAt        DateTime?
+  createdAt     DateTime         @default(now())
+  readAt        DateTime?
+  fundRequest   FundRequest?     @relation(fields: [fundRequestId], references: [id], onDelete: Cascade)
+  user          User             @relation(fields: [userId], references: [id])
+
+  @@index([fundRequestId])
+  @@index([sentAt])
+  @@index([readAt])
+  @@index([createdAt])
+  @@index([userId])
+  @@index([type])
+}
+
+model FailedNotification {
+  id             String           @id @default(cuid())
+  notificationId String
+  userId         String
+  type           NotificationType
+  payload        Json
+  error          String
+  createdAt      DateTime         @default(now())
+}
+
+enum AuthRole {
+  SUPER_ADMIN
+  ADMIN
+  USER
+}
+
+enum PoAgingFlag {
+  GREEN
+  WARNING
+  RED
+}
+
+enum PoLineStatus {
+  NOT_INVOICED
+  INVOICED
+}
 
 enum FundRequestStatus {
   PENDING
@@ -341,52 +323,6 @@ enum FundRequestSource {
   MANUAL
 }
 
-
-// ============ CONTRACT AMENDMENTS (AUDIT) ============
-
-model ContractAmendment {
-  id                  String @id @default(uuid())
-  purchaseOrderLineId String
-
-  purchaseOrderLine PurchaseOrderLine @relation(fields: [purchaseOrderLineId], references: [id], onDelete: Cascade)
-
-  oldAmount Decimal @db.Decimal(15, 2)
-  newAmount Decimal @db.Decimal(15, 2)
-
-  reason     String
-  approvedBy String
-
-  createdAt DateTime @default(now())
-
-  @@index([purchaseOrderLineId])
-}
-
-// ============ NOTIFICATIONS ============
-
-model Notification {
-  id     String @id @default(uuid())
-  userId String
-
-  user User @relation(fields: [userId], references: [id])
-
-  fundRequestId String?
-  fundRequest   FundRequest? @relation(fields: [fundRequestId], references: [id], onDelete: Cascade)
-
-  type    NotificationType
-  payload Json
-
-  sentAt    DateTime?
-  createdAt DateTime  @default(now())
-  readAt DateTime?
-
-  @@index([fundRequestId])
-  @@index([sentAt])
-  @@index([readAt])
-  @@index([createdAt])
-  @@index([userId])
-  @@index([type])
-}
-
 enum NotificationType {
   FUND_REQUEST_CREATED
   FUND_REQUEST_APPROVED
@@ -396,15 +332,5 @@ enum NotificationType {
   ACCOUNT_CREATED
   PASSWORD_RESET
   PASSWORD_CHANGED
-  PO_AGING_ALERT    
-}
-
-model FailedNotification {
-  id             String           @id @default(cuid())
-  notificationId String
-  userId         String
-  type           NotificationType
-  payload        Json
-  error          String
-  createdAt      DateTime         @default(now())
+  PO_AGING_ALERT
 }

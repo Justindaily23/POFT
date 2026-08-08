@@ -25,6 +25,11 @@ export interface PoAgingDaysResponse {
   poInvoiceStatus: PoLineStatus;
 }
 
+export interface PoAgingDuidCardsPaginatedResponse {
+  data: DuidGroupDto[];
+  nextCursor: string | null;
+}
+
 // This represents the PAGINATED wrapper
 export interface PoAgingDaysPaginatedResponse {
   data: PoAgingDaysResponse[]; // Changed from PoAgingDaysItem to PoAgingDaysResponse
@@ -47,11 +52,18 @@ export interface CriticalProject {
   status: PoAgingFlag;
 }
 export interface PoAgingKpiDto {
+  totalPOs: number; // ✅ ADDED: Unique PO numbers count
   invoicedPOs: number;
   notInvoicedPOs: number;
   invoiceRate: number;
   avgPoAgingDays: number;
   totalPOLines?: number;
+  criticalAgedPos: number; // ✅ Count of red-flagged elements
+
+  // totalPoAmount?: number;
+  // totalContractAmount?: number;
+  // totalApprovedAmount?: number;
+  // totalRemainingBalance?: number;
 }
 
 export interface DuidGroupDto {
@@ -64,6 +76,10 @@ export interface DuidGroupDto {
   totalNotInvoiced: number;
   maxDaysOpen: number;
   worstAgingFlag: PoAgingFlag;
+  totalPoAmount: number;
+  totalContractAmount: number;
+  totalApprovedAmount: number;
+  totalRemainingBalance: number;
 }
 
 export interface PoGroupDto {
@@ -73,6 +89,10 @@ export interface PoGroupDto {
   notInvoicedCount: number;
   maxDaysOpen: number;
   worstAgingFlag: PoAgingFlag;
+  totalPoAmount: number;
+  totalContractAmount: number;
+  totalApprovedAmount: number;
+  totalRemainingBalance: number;
 }
 
 export interface PoAgingLineDto {
@@ -96,6 +116,10 @@ export interface PoAgingLineDto {
   itemCode: string;
   itemDescription: string;
   poInvoiceStatus: PoLineStatus;
+  contractAmount: number;
+  totalRequestedAmount: number;
+  totalApprovedAmount: number;
+  remainingBalance: number;
 }
 
 export interface PoAgingKpiResponse {

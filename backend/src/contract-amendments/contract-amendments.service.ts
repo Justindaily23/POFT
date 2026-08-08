@@ -6,11 +6,13 @@ import Decimal from 'decimal.js';
 import { logger } from 'src/common/logger/logger';
 import { NotificationType } from '@prisma/client';
 import { ContractAmendedPayload } from '@/notifications/types/notification-payload.interface';
+import { PoLineFinancialService } from '@/common/financial/po-line-financial.service';
 @Injectable()
 export class ContractAmendmentsService {
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
+    private readonly financialService: PoLineFinancialService,
   ) {}
 
   async createAmendment(dto: CreateContractAmendmentDto, adminId: string) {
@@ -39,8 +41,12 @@ export class ContractAmendmentsService {
           );
         }
 
+        // Reconcile FIRST so totalApprovedAmount is guaranteed fresh  before we use it for the safety check below
         // const decimalNewAmount = new Decimal(newContractAmount);
-        const totalApproved = new Decimal(poLine.totalApprovedAmount ?? 0);
+        const freshFinancials = await this.financialService.reconcilePoLineFinancials(tx, purchaseOrderLineId);
+        const totalApproved = new Decimal(freshFinancials?.totalApprovedAmount ?? poLine.totalApprovedAmount ?? 0);
+
+        await this.financialService.reconcilePoLineFinancials(tx, purchaseOrderLineId);
 
         if (decimalNewAmount.lt(totalApproved)) {
           // FIX: Added .toString() to totalApproved to resolve template literal error
@@ -49,8 +55,10 @@ export class ContractAmendmentsService {
           );
         }
 
-        const remainingBalance = decimalNewAmount.minus(totalApproved);
-
+        // FIX: removed manual remainingBalance calculation here.
+        // reconcilePoLineFinancials (called again below, after contractAmount
+        // changes) is now the single writer of remainingBalance — no more
+        // duplicate formulas racing to set the same field.
         const updatedPoLine = await tx.purchaseOrderLine.update({
           where: {
             id: purchaseOrderLineId,
@@ -58,7 +66,6 @@ export class ContractAmendmentsService {
           },
           data: {
             contractAmount: newContractAmount,
-            remainingBalance: remainingBalance.toNumber(),
             version: { increment: 1 },
           },
         });
@@ -73,6 +80,10 @@ export class ContractAmendmentsService {
           },
         });
 
+        // Re-reconcile now that contractAmount has changed, so
+        // remainingBalance reflects the NEW contract amount.
+        await this.financialService.reconcilePoLineFinancials(tx, purchaseOrderLineId);
+
         const fundRequesters = await tx.fundRequest.findMany({
           where: { purchaseOrderLineId },
           select: { requestedBy: true },
@@ -86,7 +97,7 @@ export class ContractAmendmentsService {
       },
     );
 
-    // 7. Background Notification Dispatch (Non-Blocking)
+    //  Background Notification Dispatch (Non-Blocking)
     if (result.fundRequesters.length > 0) {
       const notificationPayload: ContractAmendedPayload = {
         type: NotificationType.CONTRACT_AMENDED,
@@ -96,7 +107,7 @@ export class ContractAmendmentsService {
         reason,
       };
 
-      // ✅ FIRE AND FORGET: Admin gets the response immediately
+      // FIRE AND FORGET: Admin gets the response immediately
       // The 'async' wrapper ensures errors don't crash the main process
       void (async () => {
         try {

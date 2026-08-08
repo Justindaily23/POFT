@@ -1,7 +1,9 @@
 import * as XLSX from 'xlsx';
-import { PoExcelRow } from './po-import.types';
+import * as path from 'path';
+import * as fs from 'fs';
+import { PoExcelRow } from './interfaces/po-import.interface';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 
-// Map Excel headers to your DB fields
 const headerMap: Record<string, keyof PoExcelRow> = {
   DU_ID: 'duid',
   PROJECT_NAME: 'projectName',
@@ -21,38 +23,66 @@ const headerMap: Record<string, keyof PoExcelRow> = {
 };
 
 /**
- * Reads an Excel file, normalizes headers, and returns typed PoExcelRow objects.
+ * Reads an Excel file, normalizes headers, and returns structured PoExcelRow objects.
+ * Deep data validation happens in the next stage.
  */
 export function readExcel(filePath: string): PoExcelRow[] {
-  const workbook = XLSX.readFile(filePath, {
-    cellDates: true,
-    dateNF: 'yyyy-mm-dd',
-  });
+  // 1. FILE GUARDS
+  if (!filePath || filePath.trim() === '') throw new BadRequestException('File path is missing or invalid');
+
+  const fileExtention = path.extname(filePath).toLowerCase();
+  const allowedExtensions = ['.xlsx', '.xls'];
+  if (!allowedExtensions.includes(fileExtention)) throw new BadRequestException('Only Excel files are allowed');
+
+  if (!fs.existsSync(filePath)) {
+    throw new NotFoundException(`File not found at the specified path: ${filePath}`);
+  }
+
+  // 2. PARSE WORKBOOK
+  let workbook: XLSX.WorkBook;
+  try {
+    workbook = XLSX.readFile(filePath, { cellDates: true, dateNF: 'yyyy-mm-dd' });
+  } catch (error) {
+    throw new BadRequestException('The uploaded file is corrupted or is not a valid Excel spreadsheet.');
+  }
+
   const sheetName = workbook.SheetNames[0];
   const sheet = workbook.Sheets[sheetName];
 
-  // FIX: Type rawRows as Record<string, unknown>[] to avoid 'any'
   const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: null });
 
+  if (!rawRows || rawRows.length === 0) {
+    throw new BadRequestException('The uploaded spreadsheet contains no data rows.');
+  }
+
+  // 3. TEMPLATE HEADER MATCHING GUARD
+  const excelHeaders = Object.keys(rawRows[0]).map((header) => header.trim());
+  const expectedHeaders = Object.keys(headerMap);
+
+  for (const expectedHeader of expectedHeaders) {
+    if (!excelHeaders.includes(expectedHeader)) {
+      throw new BadRequestException(
+        `Template Error: Missing expected header "${expectedHeader}". Please use the correct template.`,
+      );
+    }
+  }
+
+  // 4. STRUCTURAL MAPPING ONLY
   return rawRows.map((row) => {
-    // Start with a partial to avoid "missing properties" errors during construction
     const normalized = {} as PoExcelRow;
 
-    // Use Object.entries on the typed row
     for (const [key, value] of Object.entries(row)) {
       const trimmedKey = key.trim();
       const dbKey = headerMap[trimmedKey];
 
       if (dbKey) {
-        const finalValue = value;
+        let finalValue = value;
 
-        // Date normalization logic remains identical
+        // Date normalisation logic remains here to assist SheetJS parsing
         if (dbKey === 'poIssuedDate' && finalValue instanceof Date) {
           finalValue.setHours(0, 0, 0, 0);
         }
 
-        // Use a type-safe assignment instead of (normalized as any)
-        // This tells TS: "I am setting a valid key of PoExcelRow"
         const keyToSet = dbKey;
         (normalized as Record<keyof PoExcelRow, unknown>)[keyToSet] = finalValue;
       }

@@ -1,6 +1,7 @@
-import { PoExcelRow } from './po-import.types';
+import { BadRequestException } from '@nestjs/common';
+import { PoExcelRow, ValidationHelpers } from './interfaces/po-import.interface';
 
-export function validateRows(rows: PoExcelRow[]): PoExcelRow[] {
+export function validateRows(rows: PoExcelRow[], dataVerfication: ValidationHelpers): PoExcelRow[] {
   const errors: string[] = [];
   // Helper to safely stringify unknown values for error messages
   const formatValue = (val: unknown): string => {
@@ -47,13 +48,12 @@ export function validateRows(rows: PoExcelRow[]): PoExcelRow[] {
     for (const field of requiredFields) {
       const value = row[field];
 
-      // 1. Maintain your exact missing/empty check
       if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) {
         errors.push(`Row ${rowNo}: missing required field "${field}"`);
         continue;
       }
 
-      // 2. Numeric Validation (Preserving your cleaning logic)
+      // Numeric Validation
       if (['unitPrice', 'requestedQuantity', 'allowedOpenDays'].includes(field)) {
         let num: number;
         if (typeof value === 'number') {
@@ -64,6 +64,8 @@ export function validateRows(rows: PoExcelRow[]): PoExcelRow[] {
           num = Number(cleanValue);
         }
 
+        // If the loop is processing 'allowedOpenDays', isZeroAllowed becomes true.
+        // For all other numeric columns, it becomes false.
         const isZeroAllowed = field === 'allowedOpenDays';
         const isInvalid = isZeroAllowed ? isNaN(num) || num < 0 : isNaN(num) || num <= 0;
 
@@ -93,7 +95,9 @@ export function validateRows(rows: PoExcelRow[]): PoExcelRow[] {
           }
         }
         if (isNaN(date.getTime())) {
-          errors.push(`Row ${rowNo}: invalid date format for "poIssuedDate" (got: ${formatValue(value)})`);
+          errors.push(
+            `Row ${rowNo}: Invalid date in column "PO_ISSUED_DATE" (got: "${formatValue(value)}"). Please use YYYY-MM-DD or MM/DD/YYYY format.`,
+          );
         } else if (date > new Date()) {
           errors.push(`Row ${rowNo}: "poIssuedDate" cannot be in the future`);
         } else {
@@ -101,6 +105,20 @@ export function validateRows(rows: PoExcelRow[]): PoExcelRow[] {
         }
       }
     }
+
+    const normalizedPoType = row.poType?.toString().trim().toUpperCase().replace(/\s+/g, '_') || '';
+    const normalizedPmId = row.pmId?.toString().trim() || '';
+
+    // 1. Check if the excel PO_TYPE matches actual record
+    if (!dataVerfication.validPoTypeCodes.has(normalizedPoType)) {
+      errors.push(`Row ${rowNo}: Invalid PO_TYPE "${row.poType}". This Po type does not exist in the database.`);
+    }
+
+    // 2. Check if the Excel PM_ID matches an actual user/staff record in your database
+    if (!dataVerfication.validPmIds.has(normalizedPmId)) {
+      errors.push(`Row ${rowNo}: Invalid PM_ID "${row.pmId}". No matching Project Manager found in the database.`);
+    }
+
     rowNo++;
   }
 
@@ -108,7 +126,7 @@ export function validateRows(rows: PoExcelRow[]): PoExcelRow[] {
   if (errors.length) {
     const firstTenErrors = errors.slice(0, 10);
     const suffix = errors.length > 10 ? `\n...and ${errors.length - 10} more errors.` : '';
-    throw new Error(`Validation failed:\n${firstTenErrors.join('\n')}${suffix}`);
+    throw new BadRequestException(`Validation failed:\n${firstTenErrors.join('\n')}${suffix}`);
   }
 
   return rows;

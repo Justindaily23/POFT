@@ -1,5 +1,5 @@
 import { Injectable, Inject, NotFoundException } from '@nestjs/common';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
+// import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { PrismaService } from '../prisma/prisma.service';
 import { PoLineStatus, PoAgingFlag, Prisma, NotificationType } from '@prisma/client';
@@ -7,6 +7,7 @@ import { aggregatePoAgingDashboard } from './po-aging-aggregator';
 import { PoAgingFilterDto } from './dto/po-filter.dto';
 import {
   PoAgingDashboardResponse,
+  PoAgingDuidCardsPaginatedResponse,
   PoAgingDaysPaginatedResponse,
   PoAgingLineDto,
   PoLineWithRelations,
@@ -17,14 +18,14 @@ import { NotificationsService } from 'src/notifications/notifications.service';
 
 @Injectable()
 export class PoAnalyticsService {
-  private readonly CACHE_PREFIX = 'po_dashboard_';
+  // private readonly CACHE_PREFIX = 'po_dashboard_';
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly agingEvaluator: PoAgingEvaluatorService,
     private readonly notificationsService: NotificationsService,
 
-    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
+    // @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
   /**
@@ -114,22 +115,13 @@ export class PoAnalyticsService {
     return { AND: conditions };
   }
 
-  /**
-   * Dashboard analytics with total database truth and background sync
-   */
   async getDashboardAnalytics(query: PoAgingFilterDto, userId?: string): Promise<PoAgingDashboardResponse> {
-    const cacheKey = `${this.CACHE_PREFIX}${userId || 'ADMIN'}_${JSON.stringify(query)}`;
-
-    const cached = await this.cacheManager.get<PoAgingDashboardResponse>(cacheKey);
-    if (cached) return cached;
-
     const where = await this.buildWhere(query, userId);
 
-    // ✅ NORMALIZE AND: Prevents 'Symbol.iterator' error on Prisma Union types
+    // NORMALIZE AND: Prevents 'Symbol.iterator' error on Prisma Union types
     const baseAND = Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : [];
 
     // Fetch counts and full record set in parallel for speed
-    // FIX 192: Explicitly cast 'lines' to PoLineWithRelations[]
     const [total, invoiced, lines] = await Promise.all([
       this.prisma.purchaseOrderLine.count({ where }),
       this.prisma.purchaseOrderLine.count({
@@ -141,13 +133,12 @@ export class PoAnalyticsService {
           purchaseOrder: true,
           poType: { select: { code: true } },
         },
-      }) as Promise<PoLineWithRelations[]>, // ✅ Casting here fixes member access errors
+      }) as Promise<PoLineWithRelations[]>,
     ]);
 
-    // FIX 75: Ensure invoiced and total are handled as numbers for arithmetic
     const invoiceRate = total > 0 ? (Number(invoiced) / Number(total)) * 100 : 0;
 
-    // Throttled background update - FIX: type-safe error handling
+    // Throttled background update
     this.runBackgroundSync(lines).catch((err: unknown) => {
       const msg = err instanceof Error ? err.message : 'Unknown sync error';
       logger.error('Background Aging Sync failed', msg);
@@ -156,7 +147,13 @@ export class PoAnalyticsService {
     const dtoLines = lines.map((line) => this.mapToDto(line));
     const aggregated = aggregatePoAgingDashboard(dtoLines);
 
-    const result: PoAgingDashboardResponse = {
+    // NOTE: this fetch is intentionally unbounded (no take/skip) because
+    // aggregatePoAgingDashboard needs row-level data to build the DUID/PO
+    // hierarchy — flat SUM() aggregation can't produce this shape. Fine at
+    // current and projected volume (~10-30k rows over 3 years). If this
+    // endpoint gets slow as data grows, the fix is pagination or a
+    // GROUP BY-based rewrite of the aggregation — not re-adding a cache.
+    return {
       kpis: {
         ...aggregated.kpis,
         totalPOLines: total,
@@ -168,9 +165,123 @@ export class PoAnalyticsService {
       duids: aggregated.duids,
       nextCursor: null,
     };
+  }
 
-    await this.cacheManager.set(cacheKey, result, 3600);
-    return result;
+  /**
+   * Dashboard analytics with total database truth and background sync
+   */
+  // async getDashboardAnalytics(query: PoAgingFilterDto, userId?: string): Promise<PoAgingDashboardResponse> {
+  //   const cacheKey = `${this.CACHE_PREFIX}${userId || 'ADMIN'}_${JSON.stringify(query)}`;
+
+  //   const cached = await this.cacheManager.get<PoAgingDashboardResponse>(cacheKey);
+  //   if (cached) return cached;
+
+  //   const where = await this.buildWhere(query, userId);
+
+  //   //  NORMALIZE AND: Prevents 'Symbol.iterator' error on Prisma Union types
+  //   const baseAND = Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : [];
+
+  //   // Fetch counts and full record set in parallel for speed
+  //   // Explicitly cast 'lines' to PoLineWithRelations[]
+  //   const [total, invoiced, lines] = await Promise.all([
+  //     this.prisma.purchaseOrderLine.count({ where }),
+  //     this.prisma.purchaseOrderLine.count({
+  //       where: { AND: [...baseAND, { poLineStatus: PoLineStatus.INVOICED }] },
+  //     }),
+  //     this.prisma.purchaseOrderLine.findMany({
+  //       where,
+  //       include: {
+  //         purchaseOrder: true,
+  //         poType: { select: { code: true } },
+  //       },
+  //     }) as Promise<PoLineWithRelations[]>,
+  //   ]);
+
+  //   //  Ensure invoiced and total are handled as numbers for arithmetic
+  //   const invoiceRate = total > 0 ? (Number(invoiced) / Number(total)) * 100 : 0;
+
+  //   // Throttled background update
+  //   this.runBackgroundSync(lines).catch((err: unknown) => {
+  //     const msg = err instanceof Error ? err.message : 'Unknown sync error';
+  //     logger.error('Background Aging Sync failed', msg);
+  //   });
+
+  //   const dtoLines = lines.map((line) => this.mapToDto(line));
+  //   const aggregated = aggregatePoAgingDashboard(dtoLines);
+
+  //   const result: PoAgingDashboardResponse = {
+  //     kpis: {
+  //       ...aggregated.kpis,
+  //       totalPOLines: total,
+  //       invoicedPOs: invoiced,
+  //       notInvoicedPOs: total - invoiced,
+  //       invoiceRate,
+  //     },
+  //     topCriticalProjects: aggregated.topCriticalProjects,
+  //     duids: aggregated.duids,
+  //     nextCursor: null,
+  //   };
+
+  //   await this.cacheManager.set(cacheKey, result, 3600);
+  //   return result;
+  // }
+
+  /**
+   * Safe Parallel Test: Fetches PRE-GROUPED and paginated DUID Cards
+   * This fixes the mid-scroll jumping status color bug.
+   */
+  async getPaginatedDuidCards(query: PoAgingFilterDto, userId?: string): Promise<PoAgingDuidCardsPaginatedResponse> {
+    const page = query.page ? Number(query.page) : 1;
+    const take = query.take ? Number(query.take) : 15;
+    const skip = (page - 1) * take;
+
+    const where = await this.buildWhere(query, userId);
+
+    // 1. Group by purchaseOrderId and find the OLDEST issue date (Max urgency)
+    const designGroups = await this.prisma.purchaseOrderLine.groupBy({
+      by: ['purchaseOrderId'],
+      where,
+      _min: {
+        poIssuedDate: true, // ✅ FIX: Real database field. Oldest date = Most days open.
+      },
+      orderBy: {
+        _min: {
+          poIssuedDate: 'asc', // ✅ FIX: 'asc' puts the oldest dates (highest aging days) first
+        },
+      },
+      take,
+      skip,
+    });
+
+    const activePoIds = designGroups.map((g) => g.purchaseOrderId);
+
+    if (activePoIds.length === 0) {
+      return { data: [], nextCursor: null };
+    }
+
+    // 2. Fetch the nested lines belonging ONLY to our 15 paginated parent PurchaseOrders
+    const rawLines = (await this.prisma.purchaseOrderLine.findMany({
+      where: {
+        ...where,
+        purchaseOrderId: { in: activePoIds },
+      },
+      include: {
+        purchaseOrder: true,
+        poType: { select: { code: true } },
+      },
+    })) as unknown as PoLineWithRelations[];
+
+    // 3. Aggregate flat lines into complete DuidGroupDto objects
+    const formattedLines = rawLines.map((line) => this.mapToDto(line));
+    const aggregatedResult = aggregatePoAgingDashboard(formattedLines);
+
+    // 4. Determine pagination boundaries
+    const nextCursor = designGroups.length === take ? String(page + 1) : null;
+
+    return {
+      data: aggregatedResult.duids, // Array of DuidGroupDto cards pre-built
+      nextCursor,
+    };
   }
 
   /**
@@ -225,6 +336,10 @@ export class PoAnalyticsService {
       agingFlag: evalResult.agingFlag,
       itemCode: line.itemCode ?? 'N/A',
       poLineAmount: Number(line.poLineAmount) || 0,
+      contractAmount: Number(line.contractAmount) || 0,
+      totalRequestedAmount: Number(line.totalRequestedAmount) || 0,
+      totalApprovedAmount: Number(line.totalApprovedAmount) || 0,
+      remainingBalance: Number(line.remainingBalance) || 0,
       itemDescription: line.itemDescription ?? 'N/A',
       poInvoiceStatus: line.poLineStatus,
     };

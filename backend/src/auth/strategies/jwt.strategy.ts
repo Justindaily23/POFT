@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
@@ -20,21 +20,23 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(payload: JwtPayload) {
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { tokenVersion: true, isActive: true },
+      select: { tokenVersion: true, isActive: true, mustChangePassword: true },
     });
 
     if (!user || !user.isActive) {
       throw new UnauthorizedException();
     }
-
     if (user.tokenVersion !== payload.tokenVersion) {
-      throw new UnauthorizedException('Token has been revoked');
+      throw new UnauthorizedException({
+        code: 'TOKEN_EXPIRED',
+        message: 'Token is no longer valid, please refresh',
+      });
     }
     return {
       id: payload.sub,
       role: payload.role,
       email: payload.email,
-      mustChangePassword: payload.mustChangePassword || false,
+      mustChangePassword: user.mustChangePassword || payload.mustChangePassword || false,
     };
   }
 }

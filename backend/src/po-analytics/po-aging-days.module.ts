@@ -6,7 +6,7 @@ import { PrismaModule } from 'src/prisma/prisma.module';
 import { PmAnalyticsController } from './pm-analytics.controller';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { NotificationsModule } from 'src/notifications/notifications.module';
-import { BullModule } from '@nestjs/bull';
+import { BullModule } from '@nestjs/bullmq';
 
 @Module({
   imports: [

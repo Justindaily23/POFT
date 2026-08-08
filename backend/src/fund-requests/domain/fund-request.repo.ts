@@ -7,7 +7,11 @@ export interface FundRequestRepoTx {
   //   getRejectedAggregate(poLineId: string): Promise<Prisma.Decimal>;
   updatePOLineRejectedAmountIncrement(poLineId: string, amount: Prisma.Decimal): Promise<void>;
 
-  approveFundRequest(requestId: string, adminId: string): Promise<FundRequestWithRelations>;
+  approveFundRequest(
+    requestId: string,
+    adminId: string,
+    updatedRequestedAmount?: Prisma.Decimal,
+  ): Promise<FundRequestWithRelations>;
 
   rejectFundRequest(requestId: string, adminId: string, rejectionReason: string): Promise<FundRequestWithRelations>;
 

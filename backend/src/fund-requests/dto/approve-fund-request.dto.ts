@@ -31,4 +31,17 @@ export class ApproveFundRequestDto {
     return value as number | undefined;
   })
   setContractAmount?: number;
+
+  @ValidateIf((o: ApproveFundRequestDto) => o.action === ApprovalAction.APPROVE)
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  @Transform(({ value }: TransformFnParams): number | undefined => {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      return trimmed === '' ? undefined : Number(trimmed);
+    }
+    return value as number | undefined;
+  })
+  updatedRequestedAmount?: number;
 }

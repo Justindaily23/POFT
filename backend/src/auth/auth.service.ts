@@ -19,6 +19,7 @@ import { NotificationsService } from '@/notifications/notifications.service';
 import { JwtSignUser } from './types/jwtSignUser';
 import { TokenService } from './token/token.service';
 import { SessionService } from './session/session.service';
+import { AuthCacheService } from './cache/auth-cache.service';
 
 export interface AuthenticatedUser {
   id: string;
@@ -49,6 +50,7 @@ export class AuthService {
     private readonly notificationsService: NotificationsService,
     private readonly tokenService: TokenService,
     private readonly sessionService: SessionService,
+    private readonly authCacheService: AuthCacheService,
   ) {}
 
   /* ─────────────────────────────────────────────────────────────
@@ -65,8 +67,10 @@ export class AuthService {
 
   async validateUser(email: string, password: string): Promise<AuthenticatedUser | null> {
     const user = await this.prisma.user.findUnique({ where: { email } });
-    if (!user || !user.isActive) return null;
-
+    if (!user || !user.isActive) {
+      console.log(`❌ Auth Failure: No user found with email: ${email}`);
+      return null;
+    }
     const passwordMatch = await bcrypt.compare(password, user.password);
     if (!passwordMatch) return null;
 
@@ -95,9 +99,29 @@ export class AuthService {
     if (!freshUser) {
       throw new UnauthorizedException('Account not available');
     }
-    const accessToken = this.tokenService.signAccessToken(freshUser);
-
     const resolvedDeviceId = deviceId || randomBytes(16).toString('hex');
+
+    const accessToken = this.tokenService.signAccessToken(freshUser);
+    await this.authCacheService.setAuthContext(
+      user.id,
+      {
+        id: freshUser.id,
+        role: freshUser.role,
+        email: freshUser.email,
+        name: user.name,
+        tokenVersion: freshUser.tokenVersion,
+        mustChangePassword: freshUser.mustChangePassword,
+        isActive: true,
+      },
+      300,
+    );
+
+    logger.info('Successful login', {
+      userId: user.id,
+      email: freshUser.email,
+      role: freshUser.role,
+      deviceId: resolvedDeviceId,
+    });
 
     res.cookie('deviceId', resolvedDeviceId, {
       httpOnly: true,
@@ -226,6 +250,20 @@ export class AuthService {
 
     const accessToken = this.tokenService.signAccessToken(user);
 
+    await this.authCacheService.setAuthContext(
+      user.id,
+      {
+        id: user.id,
+        role: user.role,
+        email: user.email,
+        name: user.fullName,
+        tokenVersion: user.tokenVersion,
+        mustChangePassword: user.mustChangePassword,
+        isActive: user.isActive,
+      },
+      300,
+    );
+
     res.cookie('refreshToken', newRefreshToken, {
       httpOnly: true,
       secure: true,
@@ -246,6 +284,9 @@ export class AuthService {
 
       await this.bumpTokenVersion(userId, tx);
     });
+    await this.authCacheService.invalidateAuthContext(userId);
+
+    logger.info('User logged out from a device', { userId, deviceId });
 
     const cookieOptions = {
       httpOnly: true,
@@ -267,6 +308,9 @@ export class AuthService {
       await tx.refreshSession.deleteMany({ where: { userId } });
       await this.bumpTokenVersion(userId, tx);
     });
+    await this.authCacheService.invalidateAuthContext(userId);
+
+    logger.info('User logged out from all devices', { userId });
 
     const cookieOptions = {
       httpOnly: true,
@@ -324,6 +368,9 @@ export class AuthService {
         where: { userId },
       });
     });
+    await this.authCacheService.invalidateAuthContext(userId);
+
+    logger.info('Password reset completed', { userId });
 
     return { message: 'Password updated successfully. Please log in again.' };
   }
@@ -369,6 +416,8 @@ export class AuthService {
       name: user.fullName,
       resetLink: resetUrl,
     });
+
+    logger.info('Password reset initiated', { userId: user.id, email: user.email });
 
     return { message: 'If an account exists with this email, a reset link has been sent.' };
   }
@@ -420,8 +469,9 @@ export class AuthService {
         }),
         await this.sessionService.revokeSessions(resetRecord.userId, tx)); // Invalidate all sessions immediately
     });
+    await this.authCacheService.invalidateAuthContext(resetRecord.userId);
 
-    logger.info(`SUCCESS: Password recovered for ${resetRecord.user.email}`);
+    logger.info('Password recovery completed', { userId: resetRecord.userId, email: resetRecord.user.email });
     return { message: 'Password reset successful. You can now log in.' };
   }
 }

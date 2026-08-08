@@ -7,13 +7,15 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import configuration from './config/configuration';
 import { validationSchema } from './config/validation.schema';
 import { AuthModule } from './auth/auth.module';
+import { JwtModule } from '@nestjs/jwt';
+import { MustChangePasswordGuard } from './auth/guards/must-change-password.gaurd';
 import { UserModule } from './user/user.module';
 import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CleanupService } from './cleanup/cleanup.service';
 import { MailerModule } from '@nestjs-modules/mailer';
-import { BullModule } from '@nestjs/bull';
+import { BullModule } from '@nestjs/bullmq';
 import { FundRequestsModule } from './fund-requests/fund-requests.module';
 import { PoWorkspaceModule } from './po-workspace/po-workspace.module';
 import { PoAgingDaysModule } from './po-analytics/po-aging-days.module';
@@ -22,8 +24,9 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-yet';
 import { ContractAmendmentsModule } from './contract-amendments/contract-amendments.module';
-import { RedisClientOptions } from 'redis';
+// import { RedisClientOptions } from 'redis';
 import { PrismaClientExceptionFilter } from './common/filters/prisma-exception.filter'; // Adjust path
+import type { StringValue } from 'ms';
 
 @Module({
   imports: [
@@ -34,6 +37,16 @@ import { PrismaClientExceptionFilter } from './common/filters/prisma-exception.f
       validationOptions: { abortEarly: false },
       envFilePath: ['.env', `.env.${process.env.NODE_ENV || 'development'}`],
       cache: true,
+    }),
+
+    JwtModule.registerAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        secret: config.get<string>('JWT_SECRET') || 'supersecret',
+        signOptions: {
+          expiresIn: (config.get<string>('JWT_EXPIRES_IN') || '15m') as StringValue,
+        },
+      }),
     }),
 
     MailerModule.forRootAsync({
@@ -55,59 +68,44 @@ import { PrismaClientExceptionFilter } from './common/filters/prisma-exception.f
       }),
     }),
 
+    // BullModule.forRootAsync({
+    //   inject: [ConfigService],
+    //   useFactory: (config: ConfigService) => ({
+    //     redis: {
+    //       host: config.get('REDIS_HOST'),
+    //       port: config.get<number>('REDIS_PORT') || 6379,
+    //       password: config.get('REDIS_PASSWORD'),
+    //       db: config.get<number>('REDIS_DB') || 0,
+    //       tls: config.get('REDIS_USE_TLS') === 'true' ? { rejectUnauthorized: false } : undefined,
+    //       lazyConnect: true,
+    //       enableReadyCheck: false,
+    //       connectTimeout: 30_000,
+    //       disconnectTimeout: 2000,
+    //       keepAlive: 30_000,
+    //       maxRetriesPerRequest: null,
+    //       retryStrategy: (times: number) => Math.min(times * 100, 3000),
+    //     },
+    //     settings: {
+    //       stalledInterval: 30_000,
+    //       guardInterval: 5000,
+    //     },
+    //   }),
+    // }),
+
     BullModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        redis: {
+        connection: {
           host: config.get('REDIS_HOST'),
           port: config.get<number>('REDIS_PORT') || 6379,
           password: config.get('REDIS_PASSWORD'),
-          db: config.get<number>('REDIS_DB') || 0,
-          tls: config.get('REDIS_USE_TLS') === 'true' ? { rejectUnauthorized: false } : undefined,
-          lazyConnect: true,  
+          tls: config.get('REDIS_USE_TLS') === 'true' ? {} : undefined,
+          maxRetriesPerRequest: null, // REQUIRED by BullMQ workers
           enableReadyCheck: false,
-          connectTimeout: 30_000,
-          disconnectTimeout: 2000,
-          keepAlive: 30_000,
-          maxRetriesPerRequest: null,
-          retryStrategy: (times: number) => Math.min(times * 100, 3000),
-        },
-        settings: {
-          stalledInterval: 30_000,
-          guardInterval: 5000,
         },
       }),
     }),
 
-    // CacheModule.registerAsync({
-    //   isGlobal: true,
-    //   inject: [ConfigService],
-    //   useFactory: async (config: ConfigService) => {
-    //     // 🔒 E2E / TEST SAFETY GUARD
-    //     if (config.get('NODE_ENV') === 'test') {
-    //       return { ttl: 0 };
-    //     }
-    //     const host = config.get<string>('REDIS_HOST') || 'localhost';
-    //     const port = config.get<number>('REDIS_PORT') || 6379;
-    //     const password = config.get<string>('REDIS_PASSWORD');
-    //     const useTls = config.get('REDIS_USE_TLS') === 'true'; // for Render / Upstash
-
-    //     const socket: RedisClientOptions['socket'] = {
-    //       host,
-    //       port,
-    //       reconnectStrategy: (retries) => Math.min(retries * 50, 500),
-    //       ...(useTls ? { tls: { rejectUnauthorized: false } } : { tls: false as const }),
-    //     } as RedisClientOptions['socket'];
-
-    //     return {
-    //       store: await redisStore({
-    //         socket,
-    //         password: password || undefined,
-    //         ttl: 3600,
-    //       }),
-    //     };
-    //   },
-    // }),
     CacheModule.registerAsync({
       isGlobal: true,
       inject: [ConfigService],
@@ -154,6 +152,10 @@ import { PrismaClientExceptionFilter } from './common/filters/prisma-exception.f
       useClass: MaintenanceGuard,
     },
     {
+      provide: APP_GUARD,
+      useClass: MustChangePasswordGuard,
+    },
+    {
       provide: APP_FILTER,
       useFactory: ({ httpAdapter }: HttpAdapterHost) => {
         return new PrismaClientExceptionFilter(httpAdapter);
@@ -163,3 +165,33 @@ import { PrismaClientExceptionFilter } from './common/filters/prisma-exception.f
   ],
 })
 export class AppModule {}
+
+// CacheModule.registerAsync({
+//   isGlobal: true,
+//   inject: [ConfigService],
+//   useFactory: async (config: ConfigService) => {
+//     // 🔒 E2E / TEST SAFETY GUARD
+//     if (config.get('NODE_ENV') === 'test') {
+//       return { ttl: 0 };
+//     }
+//     const host = config.get<string>('REDIS_HOST') || 'localhost';
+//     const port = config.get<number>('REDIS_PORT') || 6379;
+//     const password = config.get<string>('REDIS_PASSWORD');
+//     const useTls = config.get('REDIS_USE_TLS') === 'true'; // for Render / Upstash
+
+//     const socket: RedisClientOptions['socket'] = {
+//       host,
+//       port,
+//       reconnectStrategy: (retries) => Math.min(retries * 50, 500),
+//       ...(useTls ? { tls: { rejectUnauthorized: false } } : { tls: false as const }),
+//     } as RedisClientOptions['socket'];
+
+//     return {
+//       store: await redisStore({
+//         socket,
+//         password: password || undefined,
+//         ttl: 3600,
+//       }),
+//     };
+//   },
+// }),

@@ -18,14 +18,15 @@ import {
   PurchaseOrderLine,
   PurchaseOrder,
 } from '@prisma/client';
-import { InjectQueue } from '@nestjs/bull';
-import { Queue } from 'bull';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { POLineSearchResponseDto } from './dto/po-search-response.dto';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { FullFundRequestPayload } from '@/notifications/types/notification-payload.interface';
 import { logger } from '@/common/logger/logger';
 import { POLineBalances } from './domain/types';
 import { FundRequestRepository } from './infrastructure/fund-request.repository';
+import { PoLineFinancialService } from '@/common/financial/po-line-financial.service';
 
 /** Extended type to include nested relations */
 type FundRequestWithRelations = FundRequest & {
@@ -57,6 +58,7 @@ export class FundRequestsService {
     private readonly fundRequestRepo: FundRequestRepository,
     private readonly notificationsService: NotificationsService,
     @InjectQueue('notifications') private readonly notificationsQueue: Queue<NotificationJobPayload>,
+    private readonly financialService: PoLineFinancialService,
   ) {}
 
   /** PREFILL: Fetch PO Lines for PM form */
@@ -289,7 +291,7 @@ export class FundRequestsService {
     dto: ApproveFundRequestDto & { setContractAmount?: number },
     adminId: string,
   ): Promise<FundRequestResponseDto> {
-    const { action, rejectionReason, setContractAmount } = dto;
+    const { action, rejectionReason, setContractAmount, updatedRequestedAmount } = dto;
 
     const fundRequest = await this.prisma.$transaction(async (tx) => {
       const request = await tx.fundRequest.findUnique({
@@ -313,7 +315,7 @@ export class FundRequestsService {
       }
 
       // 3️⃣ FINAL APPROVAL: Reached only if no contract amount was passed in this request
-      return this.handleApproval(tx, request, adminId);
+      return this.handleApproval(tx, request, adminId, updatedRequestedAmount);
     });
 
     // 🛡️ Safety check to satisfy TypeScript and prevent runtime crashes
@@ -374,6 +376,66 @@ export class FundRequestsService {
     return this.mapToResponseDto(fundRequest);
   }
 
+  private async handleApproval(
+    tx: Prisma.TransactionClient,
+    request: FundRequestWithRelations,
+    adminId: string,
+    updatedRequestedAmount?: number,
+  ) {
+    const poLine = request.purchaseOrderLine;
+
+    if (!poLine.contractAmount) {
+      throw new BadRequestException({
+        message: 'Contract amount required',
+        requiresContract: true,
+        poLineId: poLine.id,
+      });
+    }
+
+    const repo = this.fundRequestRepo.withTx(tx);
+
+    const effectiveRequestedAmount =
+      updatedRequestedAmount != null ? new Prisma.Decimal(updatedRequestedAmount) : request.requestedAmount;
+
+    const { approvedSum } = await repo.getApprovedAggregate(poLine.id, request.id);
+
+    const proposedTotal = approvedSum.plus(effectiveRequestedAmount);
+
+    if (proposedTotal.gt(poLine.contractAmount)) {
+      throw new BadRequestException('Approval exceeds contract limit');
+    }
+
+    const approved = await repo.approveFundRequest(request.id, adminId, effectiveRequestedAmount);
+
+    const balances: POLineBalances = {
+      totalApprovedAmount: proposedTotal,
+      totalRequestedAmount: poLine.totalRequestedAmount.plus(effectiveRequestedAmount),
+      remainingBalance: poLine.contractAmount.minus(proposedTotal),
+    };
+
+    const result = await repo.updatePOLineBalances(poLine.id, poLine.totalApprovedAmount, balances);
+
+    if (!result.updated) {
+      throw new ConflictException('Concurrent update detected');
+    }
+
+    await this.financialService.reconcilePoLineFinancials(tx, poLine.id);
+
+    // ✅ FIX: attach the authoritative post-write balances onto the returned
+    // poLine, instead of leaving the caller to reconstruct remainingBalance
+    // from a stale snapshot + manual arithmetic.
+    return {
+      ...approved,
+      purchaseOrderLine: {
+        ...poLine,
+        contractAmount: poLine.contractAmount,
+        totalApprovedAmount: balances.totalApprovedAmount,
+        totalRequestedAmount: balances.totalRequestedAmount,
+        remainingBalance: balances.remainingBalance,
+      },
+    };
+  }
+
   private async handleContractSetup(
     tx: Prisma.TransactionClient,
     request: FundRequestWithRelations,
@@ -399,52 +461,16 @@ export class FundRequestsService {
       },
     });
 
+    // ✅ FIX: reconcile after the write, same as handleApproval/handleRejection,
+    // so this branch doesn't rely on totalApprovedAmount already being 0 —
+    // it derives that instead of assuming it.
+    await this.financialService.reconcilePoLineFinancials(tx, poLine.id);
+
     // ⛔ IMPORTANT: DO NOT TOUCH FUND REQUEST STATUS
     return await tx.fundRequest.findUnique({
       where: { id: request.id },
       include: { purchaseOrderLine: { include: { purchaseOrder: true } } },
     });
-  }
-
-  private async handleApproval(tx: Prisma.TransactionClient, request: FundRequestWithRelations, adminId: string) {
-    // 💡 Create shortcuts for cleaner code
-    // We have already loaded the purchaseOrderLine and purchaseOrder in the parent transaction, so we can safely access them here without additional queries
-    const poLine = request.purchaseOrderLine;
-
-    //
-    if (!poLine.contractAmount) {
-      throw new BadRequestException({
-        message: 'Contract amount required',
-        requiresContract: true,
-        poLineId: poLine.id,
-      });
-    }
-
-    const repo = this.fundRequestRepo.withTx(tx);
-
-    const { approvedSum } = await repo.getApprovedAggregate(poLine.id, request.id);
-
-    const proposedTotal = approvedSum.plus(request.requestedAmount);
-
-    if (proposedTotal.gt(poLine.contractAmount)) {
-      throw new BadRequestException('Approval exceeds contract limit');
-    }
-
-    const approved = await repo.approveFundRequest(request.id, adminId);
-
-    const balances: POLineBalances = {
-      totalApprovedAmount: proposedTotal,
-      totalRequestedAmount: poLine.totalRequestedAmount.plus(request.requestedAmount),
-      remainingBalance: poLine.contractAmount.minus(proposedTotal),
-    };
-
-    const result = await repo.updatePOLineBalances(poLine.id, poLine.totalApprovedAmount, balances);
-
-    if (!result.updated) {
-      throw new ConflictException('Concurrent update detected');
-    }
-
-    return approved;
   }
 
   private async handleRejection(
@@ -462,6 +488,7 @@ export class FundRequestsService {
     const rejected = await repo.rejectFundRequest(request.id, rejectionReason?.trim() || 'N/A', adminId);
 
     await repo.updatePOLineRejectedAmountIncrement(request.purchaseOrderLine.id, request.requestedAmount);
+    await this.financialService.reconcilePoLineFinancials(tx, request.purchaseOrderLine.id);
 
     return rejected;
   }
