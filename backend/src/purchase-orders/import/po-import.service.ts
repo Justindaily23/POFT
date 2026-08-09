@@ -31,7 +31,6 @@ export class PoImportService implements OnModuleInit {
     });
 
     if (existingSuccess) {
-      if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
       throw new BadRequestException(`File already imported on ${existingSuccess.createdAt.toDateString()}`);
     }
 
@@ -57,12 +56,16 @@ export class PoImportService implements OnModuleInit {
       },
     });
 
-    // 4. Offload processing securely to the BullMQ Redis sandbox
+    // 4. Convert memory buffer to a safe JSON-serializable base64 string for BullMQ Redis
+    const fileBase64 = file.buffer.toString('base64');
+
+    // 5. Offload processing securely to the BullMQ Redis sandbox
     await this.importQueue.add(
       'process-excel',
       {
         historyId: history.id,
-        filePath: file.path,
+        fileBuffer: fileBase64,
+        fileName: file.originalname,
       },
       {
         attempts: 3,

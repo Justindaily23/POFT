@@ -3,7 +3,6 @@ import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
 import { readExcel } from './excel.reader';
 import { validateRows } from './po-import.validator';
 import { ImportJobData, PoExcelRow, ValidationHelpers } from './interfaces/po-import.interface';
-import * as fs from 'fs';
 import Decimal from 'decimal.js';
 import { Job } from 'bullmq';
 import { logger } from '@/common/logger/logger';
