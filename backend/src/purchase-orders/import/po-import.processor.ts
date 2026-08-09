@@ -20,8 +20,8 @@ export class PoImportProcessor extends WorkerHost {
   async process(job: Job<ImportJobData>): Promise<void> {
     const { historyId, fileBuffer, fileName } = job.data;
     let poSucceeded = 0;
-    // let poFailed = 0;
     let linesProcessed = 0;
+    const touchedLineIds: string[] = []; // 🔧 collect lines to reconcile after the transaction
 
     try {
       const buffer = Buffer.from(fileBuffer, 'base64');
@@ -33,7 +33,6 @@ export class PoImportProcessor extends WorkerHost {
         poTypes = await this.prisma.poType.findMany();
         pmIds = await this.prisma.staffProfile.findMany({ select: { staffId: true } });
       } catch (dbLookupError) {
-        // ✅ Normalized string matches the test suite expectations exactly
         throw new Error('System Error: Failed to load validation metadata');
       }
 
@@ -43,21 +42,20 @@ export class PoImportProcessor extends WorkerHost {
       };
 
       const validRows = validateRows(rawRows, validationHelpers);
-
-      // Group the flat arrays of data into the expected nesting where DUID has PONumbers and PONumbers have lines.
       const grouped = this.groupRows(validRows);
       const poTypeMap = new Map(poTypes.map((t) => [t.code, t.id]));
 
-      //  Open one single global transaction for the ENTIRE file so that the whole process fails and rolls back completely
-      // should any error occur to avoid corrupt data or incomplete data
+      // 🔧 PHASE 1: Transaction now only does structural writes (PO + PO line upserts).
+      // Financial reconciliation moved OUT of the transaction — see Phase 2 below.
+      // This is what was blowing past the 60s limit: 5 extra queries per line for
+      // reconciliation, run sequentially inside one long-held transaction.
+      const txStart = Date.now();
       await this.prisma.$transaction(
         async (tx) => {
-          // Loop through grouped data
           for (const [duid, poMap] of grouped.entries()) {
             for (const [poNumber, lines] of poMap.entries()) {
               const header = lines[0];
 
-              // Upsert the parent Purchase Order Header using
               const po = await tx.purchaseOrder.upsert({
                 where: { duid_poNumber: { duid, poNumber } },
                 update: {
@@ -74,15 +72,12 @@ export class PoImportProcessor extends WorkerHost {
                 },
               });
 
-              // Loop through individual purchase order lines
               for (const line of lines) {
                 const poType = poTypeMap.get(line.poType?.trim().toUpperCase().replace(/\s+/g, '_') || '');
                 if (!poType) {
-                  // Throwing an error here immediately terminates and rolls back EVERYTHING
                   throw new Error(`PO ${poNumber} (DUID ${duid}): Unknown PO Type: ${line.poType}`);
                 }
 
-                // High-precision math calculations using Decimal.js
                 const unitPrice = new Decimal(line.unitPrice || 0);
                 const qty = new Decimal(line.requestedQuantity || 0);
 
@@ -120,17 +115,23 @@ export class PoImportProcessor extends WorkerHost {
                   },
                 });
 
-                // Downstream financial reconciliation hook using the transaction client
-                await this.financialService.reconcilePoLineFinancials(tx, lineRecord.id);
+                touchedLineIds.push(lineRecord.id); // 🔧 no reconcile call here anymore
                 linesProcessed++;
               }
-              // Increment header count safely
               poSucceeded++;
             }
           }
         },
-        { timeout: 60000 }, // Increased timeout! Processing an entire file takes longer than a single PO
+        { timeout: 120000 }, // 🔧 raised as a safety margin, on top of the Phase 1/2 split
       );
+      logger.info(`Structural transaction completed in ${Date.now() - txStart}ms`, { historyId, lineCount: linesProcessed });
+
+      // 🔧 PHASE 2: Batched financial reconciliation, OUTSIDE the transaction.
+      // Every touched line still gets synced to real FundRequest data —
+      // just via 2 queries total instead of 5 queries × number of lines.
+      const reconcileStart = Date.now();
+      await this.financialService.reconcileManyPoLines(touchedLineIds);
+      logger.info(`Financial reconciliation completed in ${Date.now() - reconcileStart}ms`, { historyId, lineCount: touchedLineIds.length });
 
       await this.prisma.poImportHistory.update({
         where: { id: historyId },
@@ -147,29 +148,30 @@ export class PoImportProcessor extends WorkerHost {
 
       if (globalErr instanceof Error) {
         const nestErr = globalErr as any;
+
         if (nestErr.response?.message) {
           message = Array.isArray(nestErr.response.message)
             ? nestErr.response.message.join('\n')
             : nestErr.response.message;
+        } else if (
+          globalErr.message.includes('Transaction API error') ||
+          globalErr.message.includes('expired transaction')
+        ) {
+          message =
+            'This file took too long to process and the operation timed out. Try splitting it into a smaller file, or contact support if this keeps happening.';
         } else {
-          // 🚀 CRITICAL FIX: Isolate the raw error message string explicitly.
-          // This detaches complex Node network socket instances so they never crash JSON stringification layers.
           message = globalErr.message;
         }
       } else {
         message = String(globalErr);
       }
-
       logger.error('Import failed and rolled back completely', { historyId, errorMessage: message });
 
-      // ✅ 2. Cleanly split the single massive string block into a real array of strings
-      // This removes the raw "\n" marks so your frontend list maps perfectly.
       const cleanedErrorLines = message
         .split('\n')
         .map((line) => line.trim())
         .filter((line) => line.length > 0);
 
-      // ✅ 3. Update your tracking table with a real structured array
       await this.prisma.poImportHistory.update({
         where: { id: historyId },
         data: {
@@ -178,9 +180,7 @@ export class PoImportProcessor extends WorkerHost {
         },
       });
 
-      // This tells the queue engine the task officially failed without passing it circular references.
       throw new Error(`Import script terminated: ${cleanedErrorLines[0] || 'Database connection aborted'}`);
-    } finally {
     }
   }
 
