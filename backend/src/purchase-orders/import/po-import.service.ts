@@ -22,8 +22,8 @@ export class PoImportService implements OnModuleInit {
 
   async importFromExcel(file: Express.Multer.File, userId?: string) {
     // 1. Hash the file to generate a unique digital fingerprint
-    const fileBuffer = fs.readFileSync(file.path);
-    const fileHash = createHash('md5').update(fileBuffer).digest('hex');
+    // const fileBuffer = fs.readFileSync(file.path);
+    const fileHash = createHash('md5').update(file.buffer).digest('hex');
 
     // 2. Prevent duplicating an import that worked completely before
     const existingSuccess = await this.prisma.poImportHistory.findFirst({

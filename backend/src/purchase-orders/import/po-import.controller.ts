@@ -1,6 +1,16 @@
-import { Controller, Post, UploadedFile, UseInterceptors, Req, Get, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  UploadedFile,
+  UseInterceptors,
+  Req,
+  Get,
+  Query,
+  UseGuards,
+  BadRequestException,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
+// import { diskStorage } from 'multer';
 import { PoImportService } from './po-import.service';
 import { ImportResult } from './interfaces/po-import.interface';
 import { PoImportHistory } from '@prisma/client';
@@ -11,6 +21,7 @@ import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { AuthRole } from 'src/auth/enums/auth-name.enums';
 import { Request } from 'express';
+import { memoryStorage } from 'multer';
 
 // 1. Define the Authenticated Request structure to satisfy strict linting
 interface AuthenticatedRequest extends Request {
@@ -31,19 +42,28 @@ export class PoImportController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(AuthRole.ADMIN, AuthRole.SUPER_ADMIN)
   @UseInterceptors(
+    // FileInterceptor('file', {
+    //   storage: memoryStorage({
+    //     destination: './uploads',
+    //     filename: (_req, file, cb) => {
+    //       const name = file.originalname.split('.')[0];
+    //       const fileExt = extname(file.originalname);
+    //       const uniqueSuffix = Date.now();
+    //       cb(null, `${name}-${uniqueSuffix}${fileExt}`);
+    //     },
+    //   }),
+    //   fileFilter: (_req, file, cb) => {
+    //     if (!file.originalname.match(/\.(xlsx|xls)$/)) {
+    //       return cb(new BadRequestException('Only Excel files are allowed!'), false);
+    //     }
+    //     cb(null, true);
+    //   },
+    // }),
     FileInterceptor('file', {
-      storage: diskStorage({
-        destination: './uploads',
-        filename: (_req, file, cb) => {
-          const name = file.originalname.split('.')[0];
-          const fileExt = extname(file.originalname);
-          const uniqueSuffix = Date.now();
-          cb(null, `${name}-${uniqueSuffix}${fileExt}`);
-        },
-      }),
+      storage: memoryStorage(), // Correct: No arguments inside parentheses
       fileFilter: (_req, file, cb) => {
         if (!file.originalname.match(/\.(xlsx|xls)$/)) {
-          return cb(new Error('Only Excel files are allowed!'), false);
+          return cb(new BadRequestException('Only Excel files are allowed!'), false);
         }
         cb(null, true);
       },

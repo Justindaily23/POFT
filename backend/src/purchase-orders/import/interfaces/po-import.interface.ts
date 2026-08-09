@@ -20,7 +20,8 @@ export interface PoExcelRow {
 
 export interface ImportJobData {
   historyId: string;
-  filePath: string;
+  fileBuffer: string;
+  fileName: string;
 }
 
 export type PoImportStatus = 'PENDING' | 'SUCCESS' | 'FAILED';

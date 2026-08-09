@@ -1,6 +1,5 @@
 import * as XLSX from 'xlsx';
 import * as path from 'path';
-import * as fs from 'fs';
 import { PoExcelRow } from './interfaces/po-import.interface';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 
@@ -26,22 +25,23 @@ const headerMap: Record<string, keyof PoExcelRow> = {
  * Reads an Excel file, normalizes headers, and returns structured PoExcelRow objects.
  * Deep data validation happens in the next stage.
  */
-export function readExcel(filePath: string): PoExcelRow[] {
-  // 1. FILE GUARDS
-  if (!filePath || filePath.trim() === '') throw new BadRequestException('File path is missing or invalid');
-
-  const fileExtention = path.extname(filePath).toLowerCase();
+export function readExcel(fileBuffer: Buffer, fileName: string): PoExcelRow[] {
+  // 1. FILE GUARDS — now validate the buffer + provided filename, not a disk path
+  if (!fileBuffer || fileBuffer.length === 0) {
+    throw new BadRequestException('File data is missing or empty');
+  }
+  const fileExtention = path.extname(fileName).toLowerCase();
   const allowedExtensions = ['.xlsx', '.xls'];
   if (!allowedExtensions.includes(fileExtention)) throw new BadRequestException('Only Excel files are allowed');
 
-  if (!fs.existsSync(filePath)) {
-    throw new NotFoundException(`File not found at the specified path: ${filePath}`);
-  }
+  // if (!fs.existsSync(filePath)) {
+  //   throw new NotFoundException(`File not found at the specified path: ${filePath}`);
+  // }
 
   // 2. PARSE WORKBOOK
   let workbook: XLSX.WorkBook;
   try {
-    workbook = XLSX.readFile(filePath, { cellDates: true, dateNF: 'yyyy-mm-dd' });
+    workbook = XLSX.read(fileBuffer, { type: 'buffer', cellDates: true, dateNF: 'yyyy-mm-dd' });
   } catch (error) {
     throw new BadRequestException('The uploaded file is corrupted or is not a valid Excel spreadsheet.');
   }

@@ -19,14 +19,14 @@ export class PoImportProcessor extends WorkerHost {
   }
 
   async process(job: Job<ImportJobData>): Promise<void> {
-    const { historyId, filePath } = job.data;
+    const { historyId, fileBuffer, fileName } = job.data;
     let poSucceeded = 0;
     // let poFailed = 0;
     let linesProcessed = 0;
 
     try {
-      // Read and validate the Excel file
-      const rawRows = readExcel(filePath);
+      const buffer = Buffer.from(fileBuffer, 'base64');
+      const rawRows = readExcel(buffer, fileName);
 
       let poTypes;
       let pmIds;
@@ -146,7 +146,7 @@ export class PoImportProcessor extends WorkerHost {
     } catch (globalErr: unknown) {
       let message = 'Purchase Order Processing failed due to an unexpected system error.';
 
-    if (globalErr instanceof Error) {
+      if (globalErr instanceof Error) {
         const nestErr = globalErr as any;
         if (nestErr.response?.message) {
           message = Array.isArray(nestErr.response.message)
@@ -160,7 +160,6 @@ export class PoImportProcessor extends WorkerHost {
       } else {
         message = String(globalErr);
       }
-
 
       logger.error('Import failed and rolled back completely', { historyId, errorMessage: message });
 
@@ -180,11 +179,9 @@ export class PoImportProcessor extends WorkerHost {
         },
       });
 
-            // This tells the queue engine the task officially failed without passing it circular references.
+      // This tells the queue engine the task officially failed without passing it circular references.
       throw new Error(`Import script terminated: ${cleanedErrorLines[0] || 'Database connection aborted'}`);
-
     } finally {
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
   }
 
