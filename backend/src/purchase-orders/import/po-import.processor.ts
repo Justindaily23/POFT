@@ -189,7 +189,7 @@ export class PoImportProcessor extends WorkerHost {
     const { historyId } = job.data;
     logger.error(`Job ${job.id} failed: ${error.message}`);
     await this.prisma.poImportHistory.updateMany({
-      where: { id: historyId },
+      where: { id: historyId, status: 'PENDING' },
       data: { status: 'FAILED', errors: [`Queue Error: ${error.message}`] },
     });
   }
