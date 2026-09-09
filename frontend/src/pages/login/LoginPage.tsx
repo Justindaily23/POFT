@@ -1,7 +1,7 @@
 import { Header } from "@/components/login/Header";
 import { Footer } from "@/components/login/Footer";
 import { LoginForm } from "@/components/login/LoginForm";
-import { Lock, HelpCircle } from "lucide-react";
+import { Lock } from "lucide-react";
 import { Link } from "react-router-dom";
 
 export default function LoginPage() {
