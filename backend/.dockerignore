@@ -3,6 +3,7 @@ dist
 .git
 .gitignore
 .env
+.env.docker
 .env.production
 .env.staging
 logs

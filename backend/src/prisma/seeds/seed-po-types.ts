@@ -6,6 +6,12 @@ function deterministicId(namespace: string, key: string): string {
   return [hash.slice(0, 8), hash.slice(8, 12), hash.slice(12, 16), hash.slice(16, 20), hash.slice(20, 32)].join('-');
 }
 
+
+/**
+ * Seeds the baseline set of PO Types for a fresh database.
+ * New PO types after initial setup should be added via the
+ * admin UI (POST /po-types), not by editing this file.
+ */
 export async function seedPoTypes(prisma: PrismaService) {
   console.log('🌱 Seeding PO Types...');
 

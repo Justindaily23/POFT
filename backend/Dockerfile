@@ -1,4 +1,5 @@
 FROM node:22-alpine AS builder
+RUN apk add --no-cache openssl
 
 # set working directory inside the container
 WORKDIR /app
@@ -27,6 +28,7 @@ RUN npm run build
 #=====================================================
 # STAGE 2
 FROM node:22-alpine AS runner
+RUN apk add --no-cache openssl
 
 WORKDIR /app
 # Set production environment flags

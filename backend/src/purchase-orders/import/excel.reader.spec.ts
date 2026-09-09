@@ -1,63 +1,50 @@
 import * as XLSX from 'xlsx';
-import * as fs from 'fs';
 import { readExcel } from './excel.reader';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 
-jest.mock('fs');
 jest.mock('xlsx', () => ({
   ...jest.requireActual('xlsx'),
-  readFile: jest.fn(),
+  read: jest.fn(),
 }));
 
 describe('readExcel Unit Tests', () => {
-  const mockFilePath = '/tmp/test-file.xlsx';
+  const mockFileName = 'test-file.xlsx';
+  const mockBuffer = Buffer.from('dummy content');
 
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  describe('File Boundary and Path validation', () => {
-    it('should throw BadRequestException if file path is empty', () => {
-      expect(() => readExcel('')).toThrow(BadRequestException);
-      expect(() => readExcel('  ')).toThrow(BadRequestException);
+  describe('File Boundary and Name validation', () => {
+    it('should throw BadRequestException if the buffer is empty', () => {
+      expect(() => readExcel(Buffer.alloc(0), mockFileName)).toThrow(BadRequestException);
     });
 
     it('should throw BadRequestException for unsupported file extensions', () => {
-      expect(() => readExcel('/tmp/test-file.txt')).toThrow(BadRequestException);
-      expect(() => readExcel('tmp/script.exe')).toThrow(BadRequestException);
-    });
-
-    it('should throw NotFoundException if file does not exist on disk', () => {
-      // Force fs.existsSync to return flase
-      (fs.existsSync as jest.Mock).mockReturnValue(false);
-      expect(() => readExcel(mockFilePath)).toThrow(NotFoundException);
+      expect(() => readExcel(mockBuffer, 'test-file.txt')).toThrow(BadRequestException);
+      expect(() => readExcel(mockBuffer, 'script.exe')).toThrow(BadRequestException);
     });
   });
 
   describe('Workbook Parsing and Corruption Validation', () => {
     it('should throw BadRequestException if XLSX library fails to parse the file', () => {
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
-
-      // Spy on readFile and simulate a low-level library crash (corrupt file)
-      jest.spyOn(XLSX, 'readFile').mockImplementation(() => {
+      // Simulate a low-level library crash (corrupt file)
+      jest.spyOn(XLSX, 'read').mockImplementation(() => {
         throw new Error('Low level zip reading error');
       });
 
-      expect(() => readExcel(mockFilePath)).toThrow(BadRequestException);
+      expect(() => readExcel(mockBuffer, mockFileName)).toThrow(BadRequestException);
     });
 
     it('should throw BadRequestException if the parsed spreadsheet has no data rows', () => {
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
-
-      // Provide an empty workbook payload setup
-      (XLSX.readFile as jest.Mock).mockReturnValue({
+      (XLSX.read as jest.Mock).mockReturnValue({
         SheetNames: ['Sheet1'],
         Sheets: { Sheet1: {} },
       });
 
       jest.spyOn(XLSX.utils, 'sheet_to_json').mockReturnValue([]);
 
-      expect(() => readExcel(mockFilePath)).toThrow(
+      expect(() => readExcel(mockBuffer, mockFileName)).toThrow(
         new BadRequestException('The uploaded spreadsheet contains no data rows.'),
       );
     });
@@ -65,9 +52,7 @@ describe('readExcel Unit Tests', () => {
 
   describe('Template Header & Mapping Validation', () => {
     it('should throw BadRequestException if a required header is missing from the template', () => {
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
-
-      (XLSX.readFile as jest.Mock).mockReturnValue({
+      (XLSX.read as jest.Mock).mockReturnValue({
         SheetNames: ['Sheet1'],
         Sheets: { Sheet1: {} },
       });
@@ -81,15 +66,13 @@ describe('readExcel Unit Tests', () => {
         },
       ]);
 
-      expect(() => readExcel(mockFilePath)).toThrow(BadRequestException);
+      expect(() => readExcel(mockBuffer, mockFileName)).toThrow(BadRequestException);
     });
 
     it('should successfully map raw Excel fields to camelCase properties when template matches perfectly', () => {
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
-
       const mockExcelDate = new Date('2026-08-05T12:00:00.000Z');
 
-      (XLSX.readFile as jest.Mock).mockReturnValue({
+      (XLSX.read as jest.Mock).mockReturnValue({
         SheetNames: ['Sheet1'],
         Sheets: { Sheet1: {} },
       });
@@ -115,7 +98,7 @@ describe('readExcel Unit Tests', () => {
         },
       ]);
 
-      const result = readExcel(mockFilePath);
+      const result = readExcel(mockBuffer, mockFileName);
 
       // Assert array size
       expect(result).toHaveLength(1);

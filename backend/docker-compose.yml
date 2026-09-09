@@ -1,14 +1,38 @@
 services:
-  # The Redis Instance
+  poft-postgres:
+    image: postgres:16-alpine
+    container_name: poft-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: poft
+      POSTGRES_PASSWORD: Justin99
+      POSTGRES_DB: poft
+    ports:
+      - "5432:5432"
+    volumes:
+      - poft-postgres-data:/var/lib/postgresql/data
+    networks:
+      - poft-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U poft"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   poft-redis:
     image: redis:7-alpine
     container_name: poft-redis
+    restart: unless-stopped
     ports:
       - "6379:6379"
     networks:
       - poft-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
-  # Your NestJS Application
   poft-backend:
     build:
       context: .
@@ -17,18 +41,28 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NODE_ENV=production
-      # This hostname matches the service name 'poft-redis' exactly
-      - REDIS_HOST=poft-redis
-      - REDIS_PORT=6379
-      - REDIS_DB=0
-      - REDIS_USE_TLS=false
-      # Include your database credentials or other .env requirements here
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://poft:Justin99@poft-postgres:5432/poft
+      - REDIS_URL=redis://poft-redis:6379
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=15m
+      - REFRESH_TOKEN_EXPIRES_IN=24h
+      - SUPER_ADMIN_EMAIL=${SUPER_ADMIN_EMAIL}
+      - SEED_DEFAULT_PASSWORD=${SEED_DEFAULT_PASSWORD}
+      # add any other required env vars (SMTP_*, etc.) here or via env_file below
+    env_file:
+      - .env.docker
     depends_on:
-      - poft-redis
+      poft-postgres:
+        condition: service_healthy
+      poft-redis:
+        condition: service_healthy
     networks:
       - poft-network
 
 networks:
   poft-network:
     driver: bridge
+
+volumes:
+  poft-postgres-data:

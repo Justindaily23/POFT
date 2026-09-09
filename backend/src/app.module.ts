@@ -23,6 +23,7 @@ import { MetadataModule } from './metadata/metadata.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-yet';
+import { PoTypeModule } from './purchase-orders/po-type.module';
 import { ContractAmendmentsModule } from './contract-amendments/contract-amendments.module';
 import { PrismaClientExceptionFilter } from './common/filters/prisma-exception.filter';
 import type { StringValue } from 'ms';
@@ -119,6 +120,7 @@ import { getRedisConnectionOptions } from './redis/redis-config.util';
     PoWorkspaceModule,
     PoAgingDaysModule,
     MetadataModule,
+    PoTypeModule,
   ],
   controllers: [AppController],
   providers: [

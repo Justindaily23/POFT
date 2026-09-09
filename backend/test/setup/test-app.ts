@@ -3,7 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import { AppModule } from '../../src/app.module';
 import { MailerService } from '@nestjs-modules/mailer';
-import { BullModule, getQueueToken } from '@nestjs/bull';
+import { BullModule, getQueueToken } from '@nestjs/bullmq';
 import { CacheModule } from '@nestjs/cache-manager';
 import { NotificationsService } from '../../src/notifications/notifications.service';
 import { PrismaService } from '@/prisma/prisma.service';

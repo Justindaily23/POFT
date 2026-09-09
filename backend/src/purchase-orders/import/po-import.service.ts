@@ -3,7 +3,6 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { createHash } from 'crypto';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import * as fs from 'fs';
 import { ImportResult, PoImportStatus } from './interfaces/po-import.interface';
 import { PoImportHistory } from '@prisma/client';
 
