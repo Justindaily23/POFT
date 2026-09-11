@@ -113,8 +113,8 @@ export const AdminPoAnalyticsPage: React.FC<Props> = ({ userRole }) => {
                         <th className="px-6 py-4">Duid Project Code & Project Name</th>
                         <th className="px-6 py-4">PO Number & Po Type</th>
                         <th className="px-6 py-4">Aging Days & Issued Date</th>
-                        <th className="px-6 py-4 text-center">SLA Status</th>
-                        <th className="px-6 py-4 text-right">Po Line</th>
+                        <th className="px-6 py-4 text-center">Status</th>
+                        <th className="px-6 py-4 text-right">Po Line/AOD</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -143,7 +143,7 @@ export const AdminPoAnalyticsPage: React.FC<Props> = ({ userRole }) => {
                             <StatusBadge flag={line.agingFlag} />
                           </td>
                           <td className="px-6 py-4 text-right">
-                            <div className="text-[14px] text-indigo-800">{line.poLineNumber}</div>
+                            <div className="text-[14px] text-indigo-800">{line.poLineNumber}/{line.allowedOpenDays}</div>
                           </td>
                         </tr>
                       ))}
