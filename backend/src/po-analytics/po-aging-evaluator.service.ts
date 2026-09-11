@@ -40,7 +40,8 @@ export class PoAgingEvaluatorService {
     }
 
     const today = new Date();
-    const daysOpen = Math.max(0, Math.floor((today.getTime() - line.poIssuedDate.getTime()) / 86400000));
+    const rawDaysOpen = Math.max(0, Math.floor((today.getTime() - line.poIssuedDate.getTime()) / 86400000));
+    const daysOpen = Math.min(rawDaysOpen, line.allowedOpenDays);
     const agingPercentage = (daysOpen / line.allowedOpenDays) * 100;
 
     let agingFlag: PoAgingFlag = PoAgingFlag.GREEN;
