@@ -5,6 +5,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { ImportResult, PoImportStatus } from './interfaces/po-import.interface';
 import { PoImportHistory } from '@prisma/client';
+import { logger } from 'src/common/logger/logger';
 
 @Injectable()
 export class PoImportService implements OnModuleInit {
@@ -14,8 +15,15 @@ export class PoImportService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    if (this.importQueue && typeof this.importQueue.clean === 'function') {
-      await this.importQueue.clean(0, 1000, 'failed');
+    try {
+      if (this.importQueue && typeof this.importQueue.clean === 'function') {
+        await this.importQueue.clean(0, 1000, 'failed');
+        logger.info('BullMQ "po-imports" failed jobs queue flushed cleanly on startup');
+      }
+    } catch (err: unknown) {
+      logger.error('Failed to clean BullMQ failed jobs queue on application initialization', {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
@@ -30,6 +38,7 @@ export class PoImportService implements OnModuleInit {
     });
 
     if (existingSuccess) {
+      logger.warn(`File upload rejected: Duplicate hash found for file ${file.originalname}`, { userId, fileHash });
       throw new BadRequestException(`File already imported on ${existingSuccess.createdAt.toDateString()}`);
     }
 
@@ -59,19 +68,42 @@ export class PoImportService implements OnModuleInit {
     const fileBase64 = file.buffer.toString('base64');
 
     // 5. Offload processing securely to the BullMQ Redis sandbox
-    await this.importQueue.add(
-      'process-excel',
-      {
+    try {
+      await this.importQueue.add(
+        'process-excel',
+        {
+          historyId: history.id,
+          fileBuffer: fileBase64,
+          fileName: file.originalname,
+        },
+        {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 5000 },
+        },
+      );
+
+      // MILESTONE LOGGING: Confirms file is safely tracking down the background pipeline
+      logger.info(`Excel file "${file.originalname}" enqueued successfully for background processing`, {
         historyId: history.id,
-        fileBuffer: fileBase64,
+        userId,
+      });
+
+    } catch (queueError: unknown) {
+      //Instantly flags database/Redis memory or cluster timeouts
+      logger.error(`Failed to hand off Excel file processing to BullMQ Redis sandbox`, {
+        historyId: history.id,
         fileName: file.originalname,
-      },
-      {
-        attempts: 3,
-        // Exponential backoff: retry after 5s, then 10s, then 20s if the database locks up
-        backoff: { type: 'exponential', delay: 5000 },
-      },
-    );
+        error: queueError instanceof Error ? queueError.message : String(queueError),
+      });
+
+      // Update the ticket to FAILED so the UI doesn't spin on PENDING forever
+      await this.prisma.poImportHistory.update({
+        where: { id: history.id },
+        data: { status: 'FAILED', errors: ['Internal queue engine connection error'] },
+      }).catch(() => undefined); // Silent catch in case database itself is down
+
+      throw new BadRequestException('Currently unavailable. Please try again shortly.');
+    }
 
     return {
       historyId: history.id,
@@ -82,12 +114,6 @@ export class PoImportService implements OnModuleInit {
       errors: [],
     };
   }
-
-  // async getImportHistoryById(id: string) {
-  //   return this.prisma.poImportHistory.findUnique({
-  //     where: { id },
-  //   });
-  // }
 
   async getImportStatus(id: string): Promise<ImportResult> {
     const history = await this.prisma.poImportHistory.findUnique({ where: { id } });

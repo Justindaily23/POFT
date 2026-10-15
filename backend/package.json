@@ -23,6 +23,8 @@
     "test:e2e": "cross-env NODE_ENV=test jest --config ./test/jest-e2e.json --runInBand --forceExit --detectOpenHandles"
   },
   "dependencies": {
+    "@logtail/node": "^0.5.12",
+    "@logtail/winston": "^0.5.12",
     "@nestjs-modules/mailer": "^2.3.4",
     "@nestjs/bullmq": "^11.0.4",
     "@nestjs/cache-manager": "^3.1.0",

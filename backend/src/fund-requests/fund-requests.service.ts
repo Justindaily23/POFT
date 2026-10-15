@@ -121,7 +121,11 @@ export class FundRequestsService {
 
   /** CREATE FUND REQUEST */
   async createFundRequest(dto: CreateFundRequestDto, userId: string): Promise<FundRequestResponseDto> {
-    if (dto.requestedAmount <= 0) {
+
+    // Cast reqeuested amount to decimal to ensure we are working with the correct type for financial calculations
+    const decimalRequestedAmount = new Prisma.Decimal(dto.requestedAmount);
+
+    if (decimalRequestedAmount.lte(0)) {
       throw new BadRequestException('Requested amount must be greater than 0');
     }
 
@@ -147,137 +151,167 @@ export class FundRequestsService {
      * The source of truth for approvals will always be the contractAmount minus the sum of approved fund requests at the time of approval.
      * This design choice significantly reduces the complexity of our transactions and allows for better scalability as we don't have to worry about locking PO line records during fund request creation.
      */
-    const fundRequest = await this.prisma.$transaction(
-      async (tx) => {
-        // 1. Upsert PO based on duid + poNumber. For manual entries, we use a "TEMP-PO" placeholder to ensure uniqueness while allowing the user to create a fund request.
-        const po = await tx.purchaseOrder.upsert({
-          // Using composite unique index on duid, ponumber to ensure we do not create duplicate pos for the same duid + poNumber combination.
-          // This allows us to handle both manual and structured entries gracefully.
-          where: { duid_poNumber: { duid: dto.duid.trim(), poNumber: dto.poNumber?.trim() ?? 'TEMP-PO' } },
-          create: {
-            duid: dto.duid.trim(),
-            poNumber: dto.poNumber?.trim(),
-            projectName: dto.projectName,
-            projectCode: dto.projectCode,
-            prNumber: dto.prNumber,
-          },
-          update: {}, // We do not update existing POs during fund request creation to preserve historical data integrity. Any changes to PO details should be handled through a separate process with proper auditing.
-        });
-
-        // 2. Upsert PO Line based on purchaseOrderId + poLineNumber. For manual entries, we use a "TEMP-LINE" placeholder to ensure uniqueness while allowing the user to create a fund request without specific line information.
-        const poLine = await tx.purchaseOrderLine.upsert({
-          where: {
-            purchaseOrderId_poLineNumber: {
-              purchaseOrderId: po.id,
-              poLineNumber: dto.poLineNumber?.trim() ?? 'TEMP-LINE',
+    let fundRequest: FundRequestWithRelations;
+    try{
+      fundRequest = await this.prisma.$transaction(
+        async (tx) => {
+          // 1. Upsert PO based on duid + poNumber. For manual entries, we use a "TEMP-PO" placeholder to ensure uniqueness while allowing the user to create a fund request.
+          const po = await tx.purchaseOrder.upsert({
+            // Using composite unique index on duid, ponumber to ensure we do not create duplicate pos for the same duid + poNumber combination.
+            // This allows us to handle both manual and structured entries gracefully.
+            where: { duid_poNumber: { duid: dto.duid.trim(), poNumber: dto.poNumber?.trim() ?? 'TEMP-PO' } },
+            create: {
+              duid: dto.duid.trim(),
+              poNumber: dto.poNumber?.trim(),
+              projectName: dto.projectName,
+              projectCode: dto.projectCode,
+              prNumber: dto.prNumber,
             },
-          },
-          create: {
-            purchaseOrderId: po.id,
-            poLineNumber: dto.poLineNumber?.trim(),
-            pm: dto.pm,
-            pmId: dto.pmId,
-            itemCode: dto.itemCode,
-            itemDescription: dto.itemDescription,
-            unitPrice: dto.unitPrice,
-            requestedQuantity: dto.requestedQuantity,
-            poLineAmount: dto.poLineAmount,
-            poIssuedDate: dto.poIssuedDate,
-            contractAmount: null,
-            /**
-             * This cached totals below used on the po line exists for performance, fast reads for ui, reporting, and avoiding repeated aggregates at scale.
-             */
-            totalRequestedAmount: new Prisma.Decimal(0),
-            totalRejectedAmount: new Prisma.Decimal(0),
-            totalApprovedAmount: new Prisma.Decimal(0),
-            remainingBalance: new Prisma.Decimal(0),
-          },
-          update: {}, // We do not update existing PO lines during fund request creation to preserve historical data integrity. Any changes to PO line details should be handled through a separate process with proper auditing.
-        });
+            update: {}, // We do not update existing POs during fund request creation to preserve historical data integrity. Any changes to PO details should be handled through a separate process with proper auditing.
+          });
 
-        // 3. Validate against contract
-        // Also note that against performace stored in the poLine in line 183, this methods ensures correctness over perfomance.
-        //  At this point we have access to the source of truth for total requested amount
-        // But also, it degrades performance, fast reads for UI
-        const aggregate = await tx.fundRequest.aggregate({
-          where: {
-            purchaseOrderLineId: poLine.id,
-            status: { in: [FundRequestStatus.PENDING, FundRequestStatus.APPROVED] },
-          },
-          _sum: { requestedAmount: true },
-        });
+          // 2. Upsert PO Line based on purchaseOrderId + poLineNumber. For manual entries, we use a "TEMP-LINE" placeholder to ensure uniqueness while allowing the user to create a fund request without specific line information.
+          const poLine = await tx.purchaseOrderLine.upsert({
+            where: {
+              purchaseOrderId_poLineNumber: {
+                purchaseOrderId: po.id,
+                poLineNumber: dto.poLineNumber?.trim() ?? 'TEMP-LINE',
+              },
+            },
+            create: {
+              purchaseOrderId: po.id,
+              poLineNumber: dto.poLineNumber?.trim(),
+              pm: dto.pm,
+              pmId: dto.pmId,
+              itemCode: dto.itemCode,
+              itemDescription: dto.itemDescription,
+              unitPrice: dto.unitPrice,
+              requestedQuantity: dto.requestedQuantity,
+              poLineAmount: dto.poLineAmount,
+              poIssuedDate: dto.poIssuedDate,
+              contractAmount: null,
+              /**
+               * This cached totals below used on the po line exists for performance, fast reads for ui, reporting, and avoiding repeated aggregates at scale.
+               */
+              totalRequestedAmount: new Prisma.Decimal(0),
+              totalRejectedAmount: new Prisma.Decimal(0),
+              totalApprovedAmount: new Prisma.Decimal(0),
+              remainingBalance: new Prisma.Decimal(0),
+            },
+            update: {}, // We do not update existing PO lines during fund request creation to preserve historical data integrity. Any changes to PO line details should be handled through a separate process with proper auditing.
+          });
 
-        // Use safe defaults to prevent "plus" crashes on null values.
-        // The aggregate will return null for _sum.requestedAmount if there are no matching fund requests, so we default to 0 in that case
-        // Stored totals are not mutated here just calculating a proposed future state
-        const currentTotal = aggregate._sum.requestedAmount ?? new Prisma.Decimal(0); // from the database
-        const newTotal = currentTotal.plus(dto.requestedAmount); // adding the new request amount to the total summed from the already existing data
+          // 3. Validate against contract
+          // Also note that against performance stored in the poLine in line 183, this methods ensures correctness over perfomance.
+          //  At this point we have access to the source of truth for total requested amount
+          // But also, it degrades performance, fast reads for UI
+          const aggregate = await tx.fundRequest.aggregate({
+            where: {
+              purchaseOrderLineId: poLine.id,
+              status: { in: [FundRequestStatus.PENDING, FundRequestStatus.APPROVED] },
+            },
+            _sum: { requestedAmount: true },
+          });
 
-        // Safe Error Message: Check if contractAmount exists before calling .toFixed()
-        if (poLine.contractAmount && newTotal.gt(poLine.contractAmount)) {
-          const maxStr = poLine.contractAmount ? poLine.contractAmount.toFixed(2) : '0.00';
-          throw new BadRequestException(`Request exceeds contract. Total: ${newTotal.toFixed(2)}, Max: ${maxStr}`);
+          // Use safe defaults to prevent "plus" crashes on null values.
+          // The aggregate will return null for _sum.requestedAmount if there are no matching fund requests, so we default to 0 in that case
+          // Stored totals are not mutated here just calculating a proposed future state
+          const currentTotal = aggregate._sum.requestedAmount ?? new Prisma.Decimal(0); // from the database
+          const newTotal = currentTotal.plus(dto.requestedAmount); // adding the new request amount to the total summed from the already existing data
+
+          // Safe Error Message: Check if contractAmount exists before calling .toFixed()
+          if (poLine.contractAmount && newTotal.gt(poLine.contractAmount)) {
+            const maxStr = poLine.contractAmount ? poLine.contractAmount.toFixed(2) : '0.00';
+            throw new BadRequestException(`Request exceeds contract. Total: ${newTotal.toFixed(2)}, Max: ${maxStr}`);
+          }
+
+          // 4. Create Fund Request
+          const newRequest = await tx.fundRequest.create({
+            data: {
+              purchaseOrderLineId: poLine.id,
+              requestedAmount: dto.requestedAmount,
+              requestPurpose: dto.requestPurpose,
+              requestedBy: userId,
+              source: isManual ? 'MANUAL' : 'STRUCTURED',
+            },
+            include: { purchaseOrderLine: { include: { purchaseOrder: true } } },
+          });
+
+          /*
+          *This ensures correctness AND performance! It syncs the cached fields
+          * right before the transaction commits globally.
+          */
+          await this.financialService.reconcilePoLineFinancials(tx, poLine.id);
+
+          /*
+          * Moving the type assertion to the return keyword ensures TypeScript 
+          * compiles cleanly without breaking your outer Promise scopes.
+          */
+          return newRequest as unknown as FundRequestWithRelations;
+        },
+        {
+          isolationLevel: 'Serializable', // Ensure the highest isolation level to prevent race conditions
         }
+      
+      );
 
-        // 4. Create Fund Request
-        return tx.fundRequest.create({
-          data: {
-            purchaseOrderLineId: poLine.id,
-            requestedAmount: dto.requestedAmount,
-            requestPurpose: dto.requestPurpose,
-            requestedBy: userId,
-            source: isManual ? 'MANUAL' : 'STRUCTURED',
-          },
-          include: { purchaseOrderLine: { include: { purchaseOrder: true } } },
-        }) as Promise<FundRequestWithRelations>;
-      },
-      {
-        isolationLevel: 'Serializable', // Ensure the highest isolation level to prevent race conditions
-      },
-    );
-
-    // 5. Notify Admins
-    const admins = await this.prisma.user.findMany({
-      where: { role: AuthRole.SUPER_ADMIN },
-      select: { id: true },
-    });
-
-    if (admins.length > 0) {
-      // ✅ Explicitly type the payload to catch missing fields early
-      const payload: FullFundRequestPayload = {
-        // 1. ADD THE DISCRIMINATOR TAG
-        type: NotificationType.FUND_REQUEST_CREATED,
-
-        duid: dto.duid,
-        projectCode: dto.projectCode,
-        projectName: dto.projectName,
-        prNumber: dto.prNumber,
-        poNumber: dto.poNumber,
-        poLineAmount: Number(dto.poLineAmount) || 0,
-        poLineNumber: dto.poLineNumber,
-        itemDescription: dto.itemDescription,
-        requestPurpose: dto.requestPurpose,
-        pm: dto.pm,
-        requestedAmount: Number(dto.requestedAmount),
-        poIssuedDate: dto.poIssuedDate,
-        contractAmount: fundRequest.purchaseOrderLine.contractAmount?.toNumber() ?? null,
-        isNegotiation: fundRequest.purchaseOrderLine.contractAmount === null,
-        requestedAt: fundRequest.createdAt,
-        requestedBy: fundRequest.requestedBy,
-      };
-
-      void Promise.all(
-        admins.map((admin) =>
-          this.notificationsService.notify(admin.id, NotificationType.FUND_REQUEST_CREATED, payload, fundRequest.id),
-        ),
-      ).catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : 'Unknown notification error';
-        logger.error(`[Admin Notification Failed] Request ${fundRequest.id}: ${message}`);
+      logger.info(`Fund request created successfully by User ${userId}`, {
+        fundRequestId: fundRequest.id,
+        purchaseOrderLineId: fundRequest.purchaseOrderLineId,
+        amount: dto.requestedAmount.toString(),
       });
-    }
 
-    // ✅ Ensure mapToResponseDto also uses safeNumber helpers internally
-    return this.mapToResponseDto(fundRequest);
+
+      // 5. Notify Admins
+      const admins = await this.prisma.user.findMany({
+        where: { role: AuthRole.SUPER_ADMIN },
+        select: { id: true },
+      });
+
+      if (admins.length > 0) {
+        // Explicitly type the payload to catch missing fields early
+        const payload: FullFundRequestPayload = {
+          type: NotificationType.FUND_REQUEST_CREATED,
+
+          duid: dto.duid,
+          projectCode: dto.projectCode,
+          projectName: dto.projectName,
+          prNumber: dto.prNumber,
+          poNumber: dto.poNumber,
+          poLineAmount: Number(dto.poLineAmount) || 0,
+          poLineNumber: dto.poLineNumber,
+          itemDescription: dto.itemDescription,
+          requestPurpose: dto.requestPurpose,
+          pm: dto.pm,
+          requestedAmount: Number(dto.requestedAmount),
+          poIssuedDate: dto.poIssuedDate,
+          contractAmount: fundRequest.purchaseOrderLine.contractAmount?.toNumber() ?? null,
+          isNegotiation: fundRequest.purchaseOrderLine.contractAmount === null,
+          requestedAt: fundRequest.createdAt,
+          requestedBy: fundRequest.requestedBy,
+        };
+
+        void Promise.all(
+          admins.map((admin) =>
+            this.notificationsService.notify(admin.id, NotificationType.FUND_REQUEST_CREATED, payload, fundRequest.id),
+          ),
+        ).catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : 'Unknown notification error';
+          logger.error(`[Admin Notification Failed] Request ${fundRequest.id}: ${message}`);
+        });
+      }
+
+      // Ensure mapToResponseDto also uses safeNumber helpers internally
+      return this.mapToResponseDto(fundRequest);
+    }catch(error: unknown) {
+        logger.error(`Failed to create fund request for user ${userId}`, {
+          duid: dto.duid,
+          poNumber: dto.poNumber,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        
+        throw error; 
+      }
   }
 
   /**
@@ -375,6 +409,7 @@ export class FundRequestsService {
     // 3. Map to DTO for the frontend
     return this.mapToResponseDto(fundRequest);
   }
+
 
   private async handleApproval(
     tx: Prisma.TransactionClient,

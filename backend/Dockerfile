@@ -49,7 +49,7 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 
 # Expose the port
-EXPOSE 3000
+EXPOSE $PORT
 
 # Start production server
 CMD ["node", "dist/main.js"]

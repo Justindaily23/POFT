@@ -9,10 +9,19 @@ export class CleanupService {
 
   @Cron(CronExpression.EVERY_DAY_AT_2AM) // runs every day at 2 AM
   async handleExpiredSessions() {
-    const deleted = await this.prisma.refreshSession.deleteMany({
-      where: { expiresAt: { lt: new Date() } },
-    });
+    try{
+      const deleted = await this.prisma.refreshSession.deleteMany({
+        where: { expiresAt: { lt: new Date() } },
+      });
 
-    logger.info(`Deleted ${deleted.count} expired refresh sessions`);
+      logger.info(`Deleted ${deleted.count} expired refresh sessions`);
+
+    }catch(error: unknown) {
+      if (error instanceof Error){
+      logger.error('Failed to clear expired refresh sessions', { error: error.message})
+      } else {
+        logger.error('An unexpected error occurred during session cleanup', { error: String(error) });
+      }
+    }
   }
 }

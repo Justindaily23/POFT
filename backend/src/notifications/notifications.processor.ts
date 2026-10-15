@@ -25,7 +25,7 @@ export class NotificationsProcessor extends WorkerHost {
     if (!builder) return null;
 
     /**
-     * ✅ INDUSTRY PROOF FIX:
+     * INDUSTRY PROOF FIX:
      * We cast through 'unknown' to bridge the gap between the
      * NotificationMapping definition and the Template Registry.
      */
@@ -84,7 +84,6 @@ export class NotificationsProcessor extends WorkerHost {
       const errorMessage = err instanceof Error ? err.message : 'Unknown SMTP Error';
       logger.error(`Mail Error for ${notificationId}: ${errorMessage}`);
 
-      // ✅ THROW: This allows BullMQ to execute retries based on your Queue settings
       throw err;
     }
   }
