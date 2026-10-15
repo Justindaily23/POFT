@@ -8,7 +8,7 @@ const isProduction = process.env.NODE_ENV === 'production';
 if (!isProduction) {
   const envFile =
     process.env.NODE_ENV === 'development'
-      ? '.env.development'
+      ? '.env.docker'
       : process.env.NODE_ENV === 'test'
         ? '.env.test.local'
         : '.env';

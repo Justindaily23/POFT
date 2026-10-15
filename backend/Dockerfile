@@ -46,6 +46,8 @@ RUN npm install -g prisma
 # Copy the compiled JS code from stage 1
 COPY --from=builder /app/dist ./dist
 
+COPY --from=builder /app/prisma ./prisma
+
 # Copy generated prisma files
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
