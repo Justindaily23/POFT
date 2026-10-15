@@ -48,6 +48,7 @@ COPY --from=builder /app/dist ./dist
 
 # Copy generated prisma files
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/prisma ./prisma
 
 
 # Expose the port
