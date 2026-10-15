@@ -15,7 +15,7 @@ export class PoAgingEvaluatorService {
     line: Pick<PurchaseOrderLine, 'id' | 'poIssuedDate' | 'allowedOpenDays' | 'lastAgingNotifiedFlag' | 'poLineStatus'>,
   ): AgingEvaluationResult {
     /**
-     * 🛡️ SYNC GUARD:
+     * SYNC GUARD:
      * If the PO is already INVOICED, we "freeze" the aging.
      * It returns GREEN and 0 days open so it disappears from 'At Risk' reports.
      */
@@ -46,11 +46,11 @@ export class PoAgingEvaluatorService {
 
     let agingFlag: PoAgingFlag = PoAgingFlag.GREEN;
 
-    if (agingPercentage > 70 && agingPercentage <= 100) {
+    if (agingPercentage > 70 && agingPercentage < 100) {
       agingFlag = PoAgingFlag.WARNING;
     }
 
-    if (agingPercentage > 100) {
+    if (agingPercentage >= 100) {
       agingFlag = PoAgingFlag.RED;
     }
 
