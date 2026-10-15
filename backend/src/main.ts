@@ -1,10 +1,14 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
+import { WinstonModule } from 'nest-winston';
 import cookieParser from 'cookie-parser';
+import { logger,flushLogs } from './common/logger/logger';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    logger: WinstonModule.createLogger({ instance: logger }),
+  });
 
   const port = process.env.PORT || 3000;
 
@@ -16,10 +20,10 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   });
 
+  app.enableShutdownHooks();
   app.use(cookieParser());
   app.setGlobalPrefix('api', { exclude: ['/'] });
 
-  // 1. FIX: Separate the pipe configuration from the listen call
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -32,12 +36,20 @@ async function bootstrap() {
     }),
   );
 
-  // 2. Start the server as a standalone statement
   await app.listen(port, '0.0.0.0');
+
+  // Register after listen so Nest's own shutdown hooks run first
+  process.on('SIGTERM', () => {
+    void flushLogs();
+  });
 }
 
-// 3. Proper catch block for the bootstrap process
-bootstrap().catch((err: unknown) => {
-  const message = err instanceof Error ? err.message : 'Unknown error';
-  console.error(`Bootstrap failed: ${message}`);
+bootstrap().catch(async (err: unknown) => {
+  console.error('Bootstrap failed:', err);
+  logger.error('Bootstrap failed', {
+    message: err instanceof Error ? err.message : String(err),
+    stack: err instanceof Error ? err.stack : undefined,
+  });
+  await flushLogs();
+  process.exit(1);
 });
