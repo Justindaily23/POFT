@@ -39,7 +39,8 @@ ENV DATABASE_URL=""
 
 # Copy manifests and install production dependencies
 COPY package*.json ./
-RUN npm ci --omit=dev
+# RUN npm ci --omit=dev
+RUN npm ci install -g prisma 
 
 # Copy the compiled JS code from stage 1
 COPY --from=builder /app/dist ./dist
