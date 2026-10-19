@@ -29,14 +29,14 @@ export class AuthCacheService {
         return JSON.parse(cached) as AuthCachePayload;
       } catch (error: unknown) {
         logger.error(`Failed to fetch auth cache for user ${userId}`, {
-          error: error instanceof Error ? error.message : String(error)
+          error: error instanceof Error ? error.message : String(error),
         });
         await this.redis.del(this.getKey(userId)).catch(() => undefined);
         return null;
       }
     } catch (error: unknown) {
       logger.error(`Redis connection error while fetching auth context for user ${userId}`, {
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       });
       return null;
     }
@@ -45,10 +45,10 @@ export class AuthCacheService {
   async setAuthContext(userId: string, payload: AuthCachePayload, ttlSeconds: number): Promise<void> {
     try {
       await this.redis.set(this.getKey(userId), JSON.stringify(payload), 'EX', ttlSeconds);
-    } catch(error){
-        logger.error(`Failed to save auth cache for user ${userId}`, {
-          error: error instanceof Error ? error.message : String(error)
-        });
+    } catch (error) {
+      logger.error(`Failed to save auth cache for user ${userId}`, {
+        error: error instanceof Error ? error.message : String(error),
+      });
       // Fail closed for cache writes; auth should still work without Redis.
     }
   }
@@ -64,13 +64,13 @@ export class AuthCacheService {
   async invalidateAuthContexts(userIds: string[]): Promise<void> {
     if (!userIds.length) return;
     try {
-        const keys = userIds.map((id) => this.getKey(id));
-        // Pass the entire array of keys to a single Redis DEL command
-        await this.redis.del(...keys);
-      } catch (error) {
-        logger.error('Failed to batch invalidate Redis auth contexts', {
-          error: error instanceof Error ? error.message : String(error)
-        });
-      }
+      const keys = userIds.map((id) => this.getKey(id));
+      // Pass the entire array of keys to a single Redis DEL command
+      await this.redis.del(...keys);
+    } catch (error) {
+      logger.error('Failed to batch invalidate Redis auth contexts', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 }

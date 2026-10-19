@@ -29,7 +29,7 @@ export class NotificationsProcessor extends WorkerHost {
      * We cast through 'unknown' to bridge the gap between the
      * NotificationMapping definition and the Template Registry.
      */
-    const typedBuilder = builder as unknown as (p: NotificationMapping[K]) => { subject: string; html: string };
+    const typedBuilder = builder;
 
     return typedBuilder(payload as NotificationMapping[K]);
   }
@@ -55,7 +55,7 @@ export class NotificationsProcessor extends WorkerHost {
     }
 
     // 3. Resolve the template using our Generic Helper (No 'any' used here)
-    const template = this.getTemplateContent(notification.type as keyof NotificationMapping, notification.payload);
+    const template = this.getTemplateContent(notification.type, notification.payload);
 
     if (!template) {
       logger.error(`No email template defined for type: ${notification.type}`);

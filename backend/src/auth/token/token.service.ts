@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { createHash, randomBytes } from 'crypto';
 import { JwtSignUser } from '../types/jwtSignUser';
-import ms, { type StringValue } from 'ms';
+import { type StringValue } from 'ms';
 
 @Injectable()
 export class TokenService {

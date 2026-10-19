@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx';
 import * as path from 'path';
 import { PoExcelRow } from './interfaces/po-import.interface';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 
 const headerMap: Record<string, keyof PoExcelRow> = {
   DU_ID: 'duid',
@@ -42,7 +42,7 @@ export function readExcel(fileBuffer: Buffer, fileName: string): PoExcelRow[] {
   let workbook: XLSX.WorkBook;
   try {
     workbook = XLSX.read(fileBuffer, { type: 'buffer', cellDates: true, dateNF: 'yyyy-mm-dd' });
-  } catch (error) {
+  } catch {
     throw new BadRequestException('The uploaded file is corrupted or is not a valid Excel spreadsheet.');
   }
 
@@ -76,7 +76,7 @@ export function readExcel(fileBuffer: Buffer, fileName: string): PoExcelRow[] {
       const dbKey = headerMap[trimmedKey];
 
       if (dbKey) {
-        let finalValue = value;
+        const finalValue = value;
 
         // Date normalisation logic remains here to assist SheetJS parsing
         if (dbKey === 'poIssuedDate' && finalValue instanceof Date) {

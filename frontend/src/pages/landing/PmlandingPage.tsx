@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { BarChart3, ArrowRight, Clock, PlusCircle } from "lucide-react";
+import { ArrowRight, Clock, PlusCircle } from "lucide-react";
 
 const PmPoftLandingPage = () => {
   return (

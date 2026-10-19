@@ -1,10 +1,15 @@
-import { ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { TokenExpiredError } from 'jsonwebtoken';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
-  handleRequest(err: any, user: any, info: any, context: ExecutionContext) {
+  override handleRequest<TUser = Record<string, unknown>>(
+    err: unknown,
+    user: TUser | false,
+    info: unknown,
+    // _context: ExecutionContext,
+  ): TUser {
     if (info instanceof TokenExpiredError) {
       throw new UnauthorizedException({
         code: 'TOKEN_EXPIRED',
@@ -13,9 +18,11 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     }
 
     if (err || !user) {
-      throw err || new UnauthorizedException();
+      if (err instanceof Error) {
+        throw err;
+      }
+      throw new UnauthorizedException(typeof err === 'string' ? err : undefined);
     }
-
     return user;
   }
 }

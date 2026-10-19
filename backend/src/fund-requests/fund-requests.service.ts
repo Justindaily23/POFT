@@ -121,7 +121,6 @@ export class FundRequestsService {
 
   /** CREATE FUND REQUEST */
   async createFundRequest(dto: CreateFundRequestDto, userId: string): Promise<FundRequestResponseDto> {
-
     // Cast reqeuested amount to decimal to ensure we are working with the correct type for financial calculations
     const decimalRequestedAmount = new Prisma.Decimal(dto.requestedAmount);
 
@@ -152,7 +151,7 @@ export class FundRequestsService {
      * This design choice significantly reduces the complexity of our transactions and allows for better scalability as we don't have to worry about locking PO line records during fund request creation.
      */
     let fundRequest: FundRequestWithRelations;
-    try{
+    try {
       fundRequest = await this.prisma.$transaction(
         async (tx) => {
           // 1. Upsert PO based on duid + poNumber. For manual entries, we use a "TEMP-PO" placeholder to ensure uniqueness while allowing the user to create a fund request.
@@ -238,21 +237,20 @@ export class FundRequestsService {
           });
 
           /*
-          *This ensures correctness AND performance! It syncs the cached fields
-          * right before the transaction commits globally.
-          */
+           *This ensures correctness AND performance! It syncs the cached fields
+           * right before the transaction commits globally.
+           */
           await this.financialService.reconcilePoLineFinancials(tx, poLine.id);
 
           /*
-          * Moving the type assertion to the return keyword ensures TypeScript 
-          * compiles cleanly without breaking your outer Promise scopes.
-          */
-          return newRequest as unknown as FundRequestWithRelations;
+           * Moving the type assertion to the return keyword ensures TypeScript
+           * compiles cleanly without breaking your outer Promise scopes.
+           */
+          return newRequest;
         },
         {
           isolationLevel: 'Serializable', // Ensure the highest isolation level to prevent race conditions
-        }
-      
+        },
       );
 
       logger.info(`Fund request created successfully by User ${userId}`, {
@@ -260,7 +258,6 @@ export class FundRequestsService {
         purchaseOrderLineId: fundRequest.purchaseOrderLineId,
         amount: dto.requestedAmount.toString(),
       });
-
 
       // 5. Notify Admins
       const admins = await this.prisma.user.findMany({
@@ -303,15 +300,15 @@ export class FundRequestsService {
 
       // Ensure mapToResponseDto also uses safeNumber helpers internally
       return this.mapToResponseDto(fundRequest);
-    }catch(error: unknown) {
-        logger.error(`Failed to create fund request for user ${userId}`, {
-          duid: dto.duid,
-          poNumber: dto.poNumber,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        
-        throw error; 
-      }
+    } catch (error: unknown) {
+      logger.error(`Failed to create fund request for user ${userId}`, {
+        duid: dto.duid,
+        poNumber: dto.poNumber,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      throw error;
+    }
   }
 
   /**
@@ -409,7 +406,6 @@ export class FundRequestsService {
     // 3. Map to DTO for the frontend
     return this.mapToResponseDto(fundRequest);
   }
-
 
   private async handleApproval(
     tx: Prisma.TransactionClient,

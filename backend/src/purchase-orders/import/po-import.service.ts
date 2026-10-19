@@ -87,7 +87,6 @@ export class PoImportService implements OnModuleInit {
         historyId: history.id,
         userId,
       });
-
     } catch (queueError: unknown) {
       //Instantly flags database/Redis memory or cluster timeouts
       logger.error(`Failed to hand off Excel file processing to BullMQ Redis sandbox`, {
@@ -97,10 +96,12 @@ export class PoImportService implements OnModuleInit {
       });
 
       // Update the ticket to FAILED so the UI doesn't spin on PENDING forever
-      await this.prisma.poImportHistory.update({
-        where: { id: history.id },
-        data: { status: 'FAILED', errors: ['Internal queue engine connection error'] },
-      }).catch(() => undefined); // Silent catch in case database itself is down
+      await this.prisma.poImportHistory
+        .update({
+          where: { id: history.id },
+          data: { status: 'FAILED', errors: ['Internal queue engine connection error'] },
+        })
+        .catch(() => undefined); // Silent catch in case database itself is down
 
       throw new BadRequestException('Currently unavailable. Please try again shortly.');
     }

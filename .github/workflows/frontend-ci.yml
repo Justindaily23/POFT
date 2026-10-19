@@ -22,14 +22,14 @@ jobs:
         with:
           node-version: 20
           cache: "npm"
-          # ✅ Path to the lockfile inside the frontend folder
+          #  Path to the lockfile inside the frontend folder
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
       - name: Lint check
-        # ✅ Highly recommended to catch UI bugs before build
+        # Highly recommended to catch UI bugs before build
         run: npm run lint
         continue-on-error: false
 

@@ -32,7 +32,7 @@ export class PoImportProcessor extends WorkerHost {
       try {
         poTypes = await this.prisma.poType.findMany();
         pmIds = await this.prisma.staffProfile.findMany({ select: { staffId: true } });
-      } catch (dbLookupError) {
+      } catch {
         throw new Error('System Error: Failed to load validation metadata');
       }
 
@@ -124,14 +124,20 @@ export class PoImportProcessor extends WorkerHost {
         },
         { timeout: 120000 }, // 🔧 raised as a safety margin, on top of the Phase 1/2 split
       );
-      logger.info(`Structural transaction completed in ${Date.now() - txStart}ms`, { historyId, lineCount: linesProcessed });
+      logger.info(`Structural transaction completed in ${Date.now() - txStart}ms`, {
+        historyId,
+        lineCount: linesProcessed,
+      });
 
       // 🔧 PHASE 2: Batched financial reconciliation, OUTSIDE the transaction.
       // Every touched line still gets synced to real FundRequest data —
       // just via 2 queries total instead of 5 queries × number of lines.
       const reconcileStart = Date.now();
       await this.financialService.reconcileManyPoLines(touchedLineIds);
-      logger.info(`Financial reconciliation completed in ${Date.now() - reconcileStart}ms`, { historyId, lineCount: touchedLineIds.length });
+      logger.info(`Financial reconciliation completed in ${Date.now() - reconcileStart}ms`, {
+        historyId,
+        lineCount: touchedLineIds.length,
+      });
 
       await this.prisma.poImportHistory.update({
         where: { id: historyId },
@@ -147,7 +153,12 @@ export class PoImportProcessor extends WorkerHost {
       let message = 'Purchase Order Processing failed due to an unexpected system error.';
 
       if (globalErr instanceof Error) {
-        const nestErr = globalErr as any;
+        // Define a type-safe structure for the NestJS/Axios error format
+        const nestErr = globalErr as Error & {
+          response?: {
+            message?: string | string[];
+          };
+        };
 
         if (nestErr.response?.message) {
           message = Array.isArray(nestErr.response.message)
@@ -180,12 +191,14 @@ export class PoImportProcessor extends WorkerHost {
         },
       });
 
-      throw new Error(`Import script terminated: ${cleanedErrorLines[0] || 'Database connection aborted'}`);
+      // 💡 Fix for lines 195/198: Ensure we check if cleanedErrorLines[0] exists safely
+      const defaultFallback = 'Database connection aborted';
+      throw new Error(`Import script terminated: ${cleanedErrorLines[0] ?? defaultFallback}`);
     }
   }
 
   @OnWorkerEvent('failed')
-  async handleJobFailure(job: Job, error: Error) {
+  async handleJobFailure(job: Job<ImportJobData>, error: Error) {
     const { historyId } = job.data;
     logger.error(`Job ${job.id} failed: ${error.message}`);
     await this.prisma.poImportHistory.updateMany({
@@ -195,18 +208,32 @@ export class PoImportProcessor extends WorkerHost {
   }
 
   @OnWorkerEvent('stalled')
-  async handleJobStalled(jobId: string) {
+  handleJobStalled(jobId: string) {
     logger.warn(`Job ${jobId} stalled!`);
   }
 
-  private groupRows(rows: PoExcelRow[]) {
+  private groupRows(rows: PoExcelRow[]): Map<string, Map<string, PoExcelRow[]>> {
     const grouped = new Map<string, Map<string, PoExcelRow[]>>();
+
     for (const row of rows) {
-      if (!grouped.has(row.duid)) grouped.set(row.duid, new Map());
-      const duidMap = grouped.get(row.duid)!;
-      if (!duidMap.has(row.poNumber)) duidMap.set(row.poNumber, []);
-      duidMap.get(row.poNumber)!.push(row);
+      const duid = String(row.duid ?? '');
+      const poNumber = String(row.poNumber ?? '');
+
+      let duidMap = grouped.get(duid);
+      if (!duidMap) {
+        duidMap = new Map<string, PoExcelRow[]>();
+        grouped.set(duid, duidMap);
+      }
+
+      let poLines = duidMap.get(poNumber);
+      if (!poLines) {
+        poLines = [];
+        duidMap.set(poNumber, poLines);
+      }
+
+      poLines.push(row);
     }
+
     return grouped;
   }
 }

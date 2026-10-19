@@ -6,7 +6,7 @@ import tseslint from "typescript-eslint";
 import { defineConfig, globalIgnores } from "eslint/config";
 
 export default defineConfig([
-  globalIgnores(["dist"]),
+  globalIgnores(["dist", "dev-dist", "node_modules"]),
   {
     files: ["**/*.{ts,tsx}"],
     extends: [
@@ -19,7 +19,7 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
-    // ✅ Add specific rule fixes here
+    // Add specific rule fixes here
     rules: {
       // Allows style constants (badgeVariants, etc.)
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
@@ -30,7 +30,7 @@ export default defineConfig([
       ],
     },
   },
-  // ✅ ADD THIS BLOCK: Silence Shadcn UI folder specifically
+  //ADD THIS BLOCK: Silence Shadcn UI folder specifically
   {
     files: ["src/components/ui/**/*.{ts,tsx}"],
     rules: {

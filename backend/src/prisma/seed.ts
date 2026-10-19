@@ -22,9 +22,9 @@ async function bootstrap() {
     await seedStates(prisma);
     await seedSuperAdmin(prisma, configService);
 
-    console.log('\n✅ All seeds completed');
+    console.log('\n All seeds completed');
   } catch (err) {
-    console.error('❌ Seed sequence failed:', err);
+    console.error('Seed sequence failed:', err);
     process.exitCode = 1;
   } finally {
     await prisma.$disconnect();
@@ -32,4 +32,7 @@ async function bootstrap() {
   }
 }
 
-bootstrap();
+bootstrap().catch((err) => {
+  console.error('Seed bootstrap failed:', err);
+  process.exit(1);
+});

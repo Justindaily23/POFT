@@ -23,7 +23,7 @@ interface Props {
 export default function FundRequestForm({ form, selectedPOLine, isOverLimit, isPending, lastSubmittedAt, onSubmit }: Props) {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingData, setPendingData] = useState<CreateFundRequestInput | null>(null);
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     if (!lastSubmittedAt) return;

@@ -1,6 +1,4 @@
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
-// import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Cache } from 'cache-manager';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PoLineStatus, PoAgingFlag, Prisma, NotificationType } from '@prisma/client';
 import { aggregatePoAgingDashboard } from './po-aging-aggregator';
@@ -18,14 +16,10 @@ import { NotificationsService } from 'src/notifications/notifications.service';
 
 @Injectable()
 export class PoAnalyticsService {
-  // private readonly CACHE_PREFIX = 'po_dashboard_';
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly agingEvaluator: PoAgingEvaluatorService,
     private readonly notificationsService: NotificationsService,
-
-    // @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
   /**
@@ -67,7 +61,7 @@ export class PoAnalyticsService {
           conditions.push({ poIssuedDate: { gte: dStart, lte: dEnd } });
         }
       } else if (year) {
-        // ✅ PRODUCTION FIX: Explicitly cast and handle numbers to avoid "Unsafe arithmetic"
+        // PRODUCTION FIX: Explicitly cast and handle numbers to avoid "Unsafe arithmetic"
         const m = month ? Number(month) : 0;
         const d = day ? Number(day) : 1;
 
@@ -166,65 +160,6 @@ export class PoAnalyticsService {
       nextCursor: null,
     };
   }
-
-  /**
-   * Dashboard analytics with total database truth and background sync
-   */
-  // async getDashboardAnalytics(query: PoAgingFilterDto, userId?: string): Promise<PoAgingDashboardResponse> {
-  //   const cacheKey = `${this.CACHE_PREFIX}${userId || 'ADMIN'}_${JSON.stringify(query)}`;
-
-  //   const cached = await this.cacheManager.get<PoAgingDashboardResponse>(cacheKey);
-  //   if (cached) return cached;
-
-  //   const where = await this.buildWhere(query, userId);
-
-  //   //  NORMALIZE AND: Prevents 'Symbol.iterator' error on Prisma Union types
-  //   const baseAND = Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : [];
-
-  //   // Fetch counts and full record set in parallel for speed
-  //   // Explicitly cast 'lines' to PoLineWithRelations[]
-  //   const [total, invoiced, lines] = await Promise.all([
-  //     this.prisma.purchaseOrderLine.count({ where }),
-  //     this.prisma.purchaseOrderLine.count({
-  //       where: { AND: [...baseAND, { poLineStatus: PoLineStatus.INVOICED }] },
-  //     }),
-  //     this.prisma.purchaseOrderLine.findMany({
-  //       where,
-  //       include: {
-  //         purchaseOrder: true,
-  //         poType: { select: { code: true } },
-  //       },
-  //     }) as Promise<PoLineWithRelations[]>,
-  //   ]);
-
-  //   //  Ensure invoiced and total are handled as numbers for arithmetic
-  //   const invoiceRate = total > 0 ? (Number(invoiced) / Number(total)) * 100 : 0;
-
-  //   // Throttled background update
-  //   this.runBackgroundSync(lines).catch((err: unknown) => {
-  //     const msg = err instanceof Error ? err.message : 'Unknown sync error';
-  //     logger.error('Background Aging Sync failed', msg);
-  //   });
-
-  //   const dtoLines = lines.map((line) => this.mapToDto(line));
-  //   const aggregated = aggregatePoAgingDashboard(dtoLines);
-
-  //   const result: PoAgingDashboardResponse = {
-  //     kpis: {
-  //       ...aggregated.kpis,
-  //       totalPOLines: total,
-  //       invoicedPOs: invoiced,
-  //       notInvoicedPOs: total - invoiced,
-  //       invoiceRate,
-  //     },
-  //     topCriticalProjects: aggregated.topCriticalProjects,
-  //     duids: aggregated.duids,
-  //     nextCursor: null,
-  //   };
-
-  //   await this.cacheManager.set(cacheKey, result, 3600);
-  //   return result;
-  // }
 
   /**
    * Safe Parallel Test: Fetches PRE-GROUPED and paginated DUID Cards
@@ -411,7 +346,7 @@ export class PoAnalyticsService {
         data: { lastAgingNotifiedFlag: flag },
       });
     } catch (error: unknown) {
-      // ✅ FIX: Type guard to safely access .stack or .message
+      // FIX: Type guard to safely access .stack or .message
       const stack = error instanceof Error ? error.stack : 'No stack trace';
 
       logger.error(`Failed to mark notification for ${lineId}`, stack);

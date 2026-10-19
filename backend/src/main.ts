@@ -3,7 +3,7 @@ import { AppModule } from './app.module';
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { WinstonModule } from 'nest-winston';
 import cookieParser from 'cookie-parser';
-import { logger,flushLogs } from './common/logger/logger';
+import { logger, flushLogs } from './common/logger/logger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {

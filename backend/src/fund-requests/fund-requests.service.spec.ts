@@ -61,7 +61,7 @@ describe('FundRequestsService', () => {
 
     const result = await service.approveOrRejectFundRequest(
       'req-1',
-      { action: ApprovalAction.APPROVE, updatedRequestedAmount: 250 } as any,
+      { action: ApprovalAction.APPROVE, updatedRequestedAmount: 250 },
       'admin-1',
     );
 

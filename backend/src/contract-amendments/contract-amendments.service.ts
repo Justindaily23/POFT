@@ -16,21 +16,19 @@ export class ContractAmendmentsService {
 
   async createAmendment(dto: CreateContractAmendmentDto, adminId: string) {
     const { purchaseOrderLineId, newContractAmount, reason } = dto;
-    const decimalNewAmount = new  Prisma.Decimal(newContractAmount);
+    const decimalNewAmount = new Prisma.Decimal(newContractAmount);
 
     if (decimalNewAmount.lte(0)) {
       throw new BadRequestException('Contract amount must be a positive value');
     }
 
-
     if (!reason || reason.trim().length < 5) {
       throw new BadRequestException('A valid reason (min 5 characters) is required for audit');
     }
 
-    try{
+    try {
       const result = await this.prisma.$transaction(
         async (tx) => {
-
           const poLine = await tx.purchaseOrderLine.findUnique({
             where: { id: purchaseOrderLineId },
           });
@@ -47,7 +45,9 @@ export class ContractAmendmentsService {
           // Reconcile FIRST so totalApprovedAmount is guaranteed fresh  before we use it for the safety check below
           // const decimalNewAmount = new Decimal(newContractAmount);
           const freshFinancials = await this.financialService.reconcilePoLineFinancials(tx, purchaseOrderLineId);
-          const totalApproved = new Prisma.Decimal(freshFinancials?.totalApprovedAmount ?? poLine.totalApprovedAmount ?? 0);
+          const totalApproved = new Prisma.Decimal(
+            freshFinancials?.totalApprovedAmount ?? poLine.totalApprovedAmount ?? 0,
+          );
 
           // await this.financialService.reconcilePoLineFinancials(tx, purchaseOrderLineId);
 
@@ -105,7 +105,7 @@ export class ContractAmendmentsService {
         oldAmount: result.amendment.oldAmount.toString(),
         newAmount: newContractAmount.toString(),
       });
-        
+
       //  Background Notification Dispatch (Non-Blocking)
       if (result.fundRequesters.length > 0) {
         const notificationPayload: ContractAmendedPayload = {
@@ -134,10 +134,10 @@ export class ContractAmendmentsService {
         })();
       }
 
-    return {
-      amendment: result.amendment,
-      updatedPoLine: result.updatedPoLine,
-    };
+      return {
+        amendment: result.amendment,
+        updatedPoLine: result.updatedPoLine,
+      };
     } catch (error: unknown) {
       logger.error(`Failed to create contract amendment for PO Line ${purchaseOrderLineId}`, {
         adminId,

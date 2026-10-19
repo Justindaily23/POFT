@@ -40,7 +40,7 @@ import { getRedisConnectionOptions } from './redis/redis-config.util';
       envFilePath: ['.env', `.env.${process.env.NODE_ENV || 'development'}`],
       cache: true,
     }),
-     RedisModule,
+    RedisModule,
 
     JwtModule.registerAsync({
       inject: [ConfigService],
@@ -71,8 +71,6 @@ import { getRedisConnectionOptions } from './redis/redis-config.util';
       }),
     }),
 
- 
-
     BullModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
@@ -89,7 +87,6 @@ import { getRedisConnectionOptions } from './redis/redis-config.util';
         };
       },
     }),
-
 
     CacheModule.registerAsync({
       isGlobal: true,
@@ -144,5 +141,3 @@ import { getRedisConnectionOptions } from './redis/redis-config.util';
   ],
 })
 export class AppModule {}
-
-

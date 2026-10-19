@@ -454,19 +454,22 @@ export class AuthService {
 
     // 6. ATOMIC TRANSACTION (Array style is faster for 1,000 users)
     await this.prisma.$transaction(async (tx) => {
-      (await tx.user.update({
+      await tx.user.update({
         where: { id: resetRecord.userId },
         data: {
           password: hashedPassword,
           mustChangePassword: false,
           tokenVersion: { increment: 1 }, // Invalidate all existing refresh tokens immediately
         },
-      }),
-        await tx.passwordResetToken.deleteMany({
-          where: { userId: resetRecord.userId },
-        }),
-        await this.sessionService.revokeSessions(resetRecord.userId, tx)); // Invalidate all sessions immediately
+      });
+
+      await tx.passwordResetToken.deleteMany({
+        where: { userId: resetRecord.userId },
+      });
+
+      await this.sessionService.revokeSessions(resetRecord.userId, tx); // Invalidate all sessions immediately
     });
+
     await this.authCacheService.invalidateAuthContext(resetRecord.userId);
 
     logger.info('Password recovery completed', { userId: resetRecord.userId, email: resetRecord.user.email });

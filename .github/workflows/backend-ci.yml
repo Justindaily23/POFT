@@ -12,7 +12,7 @@ jobs:
   test-and-build:
     runs-on: ubuntu-latest
 
-    # ✅ Spin up a real DB for the E2E tests
+    # Spin up a real DB for the E2E tests
     services:
       postgres:
         image: postgres:15
@@ -64,7 +64,7 @@ jobs:
         run: npx prisma generate
 
       - name: Run Database Migrations
-        # ✅ Ensures the test DB schema matches your code
+        # Ensures the test DB schema matches your code
         run: npx prisma migrate deploy
 
       - name: Run E2E Tests

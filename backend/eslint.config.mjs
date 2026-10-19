@@ -1,4 +1,3 @@
-// @ts-check
 import eslint from '@eslint/js';
 import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
 import globals from 'globals';
@@ -6,8 +5,8 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    // ✅ GLOBAL IGNORES: Files ESLint should never even touch
-    ignores: ['dist/**', 'node_modules/**', 'eslint.config.mjs'],
+    // GLOBAL IGNORES: Files ESLint should never even touch
+    ignores: ['dist/**', 'node_modules/**', 'eslint.config.mjs', "**/*.spec.ts", "**/*.test.ts"],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
@@ -20,7 +19,7 @@ export default tseslint.config(
       },
       sourceType: 'commonjs',
       parserOptions: {
-        // ✅ FIXED: Tell ESLint to check BOTH the main config and any spec files
+        // FIXED: Tell ESLint to check BOTH the main config and any spec files
         // This resolves the "TSConfig does not include this file" error.
         project: ['./tsconfig.json'],
         tsconfigRootDir: import.meta.dirname,

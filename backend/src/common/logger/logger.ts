@@ -49,10 +49,7 @@ if (isTestEnvironment) {
 
 export const logger = winston.createLogger({
   level: isTestEnvironment ? 'silent' : 'info',
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.json(),
-  ),
+  format: winston.format.combine(winston.format.timestamp(), winston.format.json()),
   transports: activeTransports,
 });
 
