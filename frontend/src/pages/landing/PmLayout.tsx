@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation, Outlet, useNavigate } from "react-router-dom";
 import {
   ShieldCheck,
@@ -11,6 +11,7 @@ import {
   X,
   LogOut,
   ChevronRight,
+  Download,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { notificationApi } from "@/api/notification/notification.api";
@@ -26,13 +27,60 @@ const navItems = [
   { label: "Profile", icon: <User size={22} />, path: "/pm/profile" },
 ];
 
+interface BeforeInstallPromptEvent extends Event {
+  readonly platforms: string[];
+  readonly userChoice: Promise<{
+    outcome: 'accepted' | 'dismissed';
+    platform: string;
+  }>;
+  prompt(): Promise<void>;
+}
+
+
 const PmLayout = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [showInstallBtn, setShowInstallBtn] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
   const user = useAuthStore((state) => state.user);
   const clearAuth = useAuthStore((state) => state.clearAuth);
+
+useEffect(() => {
+  const handleBeforeInstallPrompt = (e: Event) => {
+    e.preventDefault();
+    // 🚀 Cast the standard event to our specific PWA installation event type
+    setDeferredPrompt(e as BeforeInstallPromptEvent); 
+    setShowInstallBtn(true);
+  };
+
+  window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+
+  window.addEventListener("appinstalled", () => {
+    setDeferredPrompt(null);
+    setShowInstallBtn(false);
+  });
+
+  return () => {
+    window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+  };
+}, []);
+
+  const handleInstallApp = async () => {
+    if (!deferredPrompt) return;
+    
+    deferredPrompt.prompt(); // Open browser prompt manually
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log(`PWA Installation Choice: ${outcome}`);
+    
+    setDeferredPrompt(null);
+    setShowInstallBtn(false); // Hide button after action taken
+    setIsMenuOpen(false); // Close sidebar drawer
+  };
+
+
+    
 
   const { data } = useQuery({
     queryKey: ["notifications"],
@@ -125,6 +173,23 @@ const PmLayout = () => {
                 />
               </Link>
             ))}
+
+
+            {/* --- CUSTOM UI INSTALL BUTTON INTEGRATION --- */}
+            {showInstallBtn && (
+              <div className="pt-4 border-t border-slate-100 mt-2">
+                <button
+                  onClick={handleInstallApp}
+                  className="flex w-full items-center justify-between p-4 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 active:scale-95 transition-all border border-blue-100 shadow-sm font-bold text-sm"
+                >
+                  <div className="flex items-center gap-4">
+                    <Download size={22} />
+                    <span>Install Mobile App</span>
+                  </div>
+                  <ChevronRight size={16} className="text-blue-300" />
+                </button>
+              </div>
+            )}
           </nav>
 
           {/* Explicit Logout Button */}

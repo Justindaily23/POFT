@@ -1,4 +1,3 @@
-// layouts/AdminLayout.tsx
 import { Header } from "@/components/poWokSpace/header";
 import { Outlet } from "react-router-dom";
 

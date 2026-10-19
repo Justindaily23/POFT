@@ -1,15 +1,15 @@
 import { Link } from "react-router-dom";
-import { Zap, BarChart3, ArrowRight, Clock, PlusCircle } from "lucide-react";
+import { BarChart3, ArrowRight, Clock, PlusCircle } from "lucide-react";
 
 const PmPoftLandingPage = () => {
   return (
     <div className="animate-in fade-in duration-500">
       {/* --- Hero Section --- */}
       <section className="bg-white px-6 py-10 shadow-sm">
-        <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-blue-600">Operations Dashboard</p>
-        <h2 className="mb-3 text-3xl font-extrabold tracking-tight text-slate-900">
+        <p className="mb-1 text-md font-semibold uppercase tracking-wider text-blue-600"> Funds, Analytics & Projects</p>
+        {/* <h2 className="mb-3 text-3xl font-extrabold tracking-tight text-slate-900">
           <span className="text-blue-600">Stecam Nigeria</span>
-        </h2>
+        </h2> */}
         <Link to="/pm/fund-request/new" className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 py-3.5 font-medium text-white shadow-md transition-all hover:bg-slate-800 active:scale-[0.98]">
           Create Fund Request <PlusCircle size={18} />
         </Link>
@@ -30,25 +30,7 @@ const PmPoftLandingPage = () => {
           <ArrowRight size={18} className="text-slate-300" />
         </Link>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-3 text-blue-600">
-            <Zap size={20} />
-          </div>
-          <h3 className="text-sm font-bold text-slate-900">Instant Verif</h3>
-          <p className="text-[11px] text-slate-500">POF confirmation</p>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-3 text-indigo-600">
-            <BarChart3 size={20} />
-          </div>
-          <h3 className="text-sm font-bold text-slate-900">Analytics</h3>
-        </div>
       </section>
-
-      <footer className="px-6 py-4 text-center">
-        <p className="text-[10px] font-medium uppercase tracking-widest text-slate-400">Owned by Stecam Nigeria Limited</p>
-      </footer>
     </div>
   );
 };

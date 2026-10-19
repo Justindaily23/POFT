@@ -27,8 +27,6 @@ import { AdminPoAnalyticsPage } from "./pages/po-analytics/AdminPoAnalyticsPage"
 import PmPoAnalyticsPage from "./pages/po-analytics/PmPoAnalyticsPage";
 import PoImportPage from "./pages/purchase-order/PoImportPage";
 import { setLogoutHandler, setMaintenanceHandler } from "@/api/auth/axios";
-
-// Types
 import type { AuthUser, AxiosMaintenanceError } from "./types/api/api.types";
 
 function App() {
@@ -36,7 +34,7 @@ function App() {
 
   useIdleTimeout(isAuthenticated ? 30 : 0);
 
-  // 🛡️ Explicitly typed boolean state
+  // Explicitly typed boolean state
   const [isMaintenance, setIsMaintenance] = useState<boolean>(false);
 
   useEffect(() => {
@@ -70,7 +68,7 @@ function App() {
         const { userData, accessToken } = await authApi.getCurrentUser();
         setAuth({ token: accessToken || token, user: userData });
       } catch (error: unknown) {
-        // 🟢 Type guard for maintenance status
+        // Type guard for maintenance status
         const err = error as AxiosMaintenanceError;
 
         if (err.response?.status === 503) {

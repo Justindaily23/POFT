@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { VitePWA } from "vite-plugin-pwa"; // 1. Import the plugin
+import { VitePWA } from "vite-plugin-pwa";
 import path from "path";
 
 export default defineConfig({
@@ -9,7 +9,11 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      // 2. Add the PWA configuration
+      //PWA configuration
+      injectRegister: "script",
+      devOptions: {
+        enabled: true,
+      },
       registerType: "autoUpdate",
       includeAssets: [
         "favicon.ico",
@@ -22,7 +26,7 @@ export default defineConfig({
         short_name: "Stecam",
         description: "Stecam Operations and Finance Tracking",
         theme_color: "#ffffff",
-        display: "standalone", // 3. This hides the URL bar on mobile
+        display: "standalone", //This hides the URL bar on mobile
         icons: [
           {
             src: "manifest-icon-192.maskable.png",
