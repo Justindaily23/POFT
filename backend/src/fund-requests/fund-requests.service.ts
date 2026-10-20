@@ -335,21 +335,20 @@ export class FundRequestsService {
         throw new BadRequestException('Request already processed');
       }
 
-      // 1️⃣ REJECTION: Handle and return immediately
+      // REJECTION: Handle and return immediately
       if (action === ApprovalAction.REJECT) {
         return this.handleRejection(tx, request, rejectionReason, adminId);
       }
 
-      // 2️⃣ CONTRACT SETUP: If admin provides an amount for a line without a contract
+      // CONTRACT SETUP: If admin provides an amount for a line without a contract
       if (setContractAmount != null) {
         return this.handleContractSetup(tx, request, setContractAmount);
       }
 
-      // 3️⃣ FINAL APPROVAL: Reached only if no contract amount was passed in this request
+      // FINAL APPROVAL: Reached only if no contract amount was passed in this request
       return this.handleApproval(tx, request, adminId, updatedRequestedAmount);
     });
 
-    // 🛡️ Safety check to satisfy TypeScript and prevent runtime crashes
     if (!fundRequest) {
       throw new InternalServerErrorException('Failed to process fund request transaction.');
     }
@@ -357,7 +356,7 @@ export class FundRequestsService {
     if (fundRequest.status !== FundRequestStatus.PENDING) {
       const isApproved = fundRequest.status === FundRequestStatus.APPROVED;
 
-      // 💡 Create shortcuts for cleaner code
+      //Create shortcuts for cleaner code
       const poLine = fundRequest.purchaseOrderLine;
       const po = poLine.purchaseOrder;
       try {
@@ -376,11 +375,13 @@ export class FundRequestsService {
                 status: fundRequest.status,
                 requestedAmount: (fundRequest.requestedAmount ?? new Prisma.Decimal(0)).toNumber(),
                 contractAmount: (poLine.contractAmount ?? new Prisma.Decimal(0)).toNumber(),
-                remainingBalance:
-                  (poLine.contractAmount ?? new Prisma.Decimal(0)).toNumber() -
-                  (poLine.totalApprovedAmount ?? new Prisma.Decimal(0)).toNumber() -
-                  (fundRequest.requestedAmount ?? new Prisma.Decimal(0)).toNumber(),
-                poLineNumber: poLine.poLineNumber ?? undefined,
+                remainingBalance: (poLine.remainingBalance ?? new Prisma.Decimal(0)).toNumber(),
+                //   remainingBalance:
+                //     (poLine.contractAmount ?? new Prisma.Decimal(0)).toNumber() -
+                //     (poLine.totalApprovedAmount ?? new Prisma.Decimal(0)).toNumber() -
+                //     (fundRequest.requestedAmount ?? new Prisma.Decimal(0)).toNumber(),
+                //   poLineNumber: poLine.poLineNumber ?? undefined,
+                //
               }
             : {
                 type: NotificationType.FUND_REQUEST_REJECTED,
@@ -450,19 +451,23 @@ export class FundRequestsService {
       throw new ConflictException('Concurrent update detected');
     }
 
-    await this.financialService.reconcilePoLineFinancials(tx, poLine.id);
+    const reconciled = await this.financialService.reconcilePoLineFinancials(tx, poLine.id);
+    if (!reconciled) throw new NotFoundException('PO line not found');
 
-    // ✅ FIX: attach the authoritative post-write balances onto the returned
+    // await this.financialService.reconcilePoLineFinancials(tx, poLine.id);
+
+    //FIX: attach the authoritative post-write balances onto the returned
     // poLine, instead of leaving the caller to reconstruct remainingBalance
     // from a stale snapshot + manual arithmetic.
     return {
       ...approved,
       purchaseOrderLine: {
         ...poLine,
-        contractAmount: poLine.contractAmount,
-        totalApprovedAmount: balances.totalApprovedAmount,
-        totalRequestedAmount: balances.totalRequestedAmount,
-        remainingBalance: balances.remainingBalance,
+        ...reconciled,
+        // contractAmount: poLine.contractAmount,
+        // totalApprovedAmount: balances.totalApprovedAmount,
+        // totalRequestedAmount: balances.totalRequestedAmount,
+        // remainingBalance: balances.remainingBalance,
       },
     };
   }
@@ -492,12 +497,12 @@ export class FundRequestsService {
       },
     });
 
-    // ✅ FIX: reconcile after the write, same as handleApproval/handleRejection,
+    //  FIX: reconcile after the write, same as handleApproval/handleRejection,
     // so this branch doesn't rely on totalApprovedAmount already being 0 —
     // it derives that instead of assuming it.
     await this.financialService.reconcilePoLineFinancials(tx, poLine.id);
 
-    // ⛔ IMPORTANT: DO NOT TOUCH FUND REQUEST STATUS
+    // IMPORTANT: DO NOT TOUCH FUND REQUEST STATUS
     return await tx.fundRequest.findUnique({
       where: { id: request.id },
       include: { purchaseOrderLine: { include: { purchaseOrder: true } } },

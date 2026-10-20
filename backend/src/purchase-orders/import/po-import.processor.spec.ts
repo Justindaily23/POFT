@@ -5,37 +5,52 @@ import { PoLineFinancialService } from '@/common/financial/po-line-financial.ser
 import { readExcel } from './excel.reader';
 import { validateRows } from './po-import.validator';
 import { Job } from 'bullmq';
-import * as fs from 'fs';
 import { PoExcelRow } from './interfaces/po-import.interface';
 
-// 1. Explicitly mock custom file utility modules
 jest.mock('./excel.reader');
 jest.mock('./po-import.validator');
-
-// 2. Mock 'fs' while preserving native methods like mkdirSync for Winston
-jest.mock('fs', () => {
-  const originalFs = jest.requireActual('fs');
-  return {
-    ...originalFs,
-    existsSync: jest.fn(),
-    unlinkSync: jest.fn(),
-  };
-});
 
 describe('PoImportProcessor', () => {
   let processor: PoImportProcessor;
   let prisma: PrismaService;
   let financialService: PoLineFinancialService;
 
-  // Reference database records
   const mockPoTypes = [{ id: 'type-id-123', code: 'STANDARD_PO' }];
   const mockPmIds = [{ staffId: 'pm-99' }];
 
-  // Mock transaction database client (tx)
   const mockTxClient = {
     purchaseOrder: { upsert: jest.fn() },
     purchaseOrderLine: { upsert: jest.fn() },
   };
+
+  // The processor reads job.data.{historyId, fileBuffer (base64 string), fileName}
+  const makeJob = () =>
+    ({
+      data: {
+        historyId: 'history-uuid',
+        fileName: 'test.xlsx',
+        fileBuffer: Buffer.from('dummy-excel-bytes').toString('base64'),
+      },
+    }) as unknown as Job;
+
+  const makeRow = (overrides: Partial<PoExcelRow> = {}): PoExcelRow => ({
+    duid: 'DUID001',
+    poNumber: 'PO-1001',
+    projectName: 'Project Alpha',
+    projectCode: 'PA01',
+    prNumber: 'PR-55',
+    poType: 'Standard PO', // normalised to STANDARD_PO by the processor
+    poLineNumber: '1',
+    pm: 'John Doe',
+    pmId: 'pm-99',
+    poIssuedDate: new Date(),
+    itemCode: 'ITEM-X',
+    itemDescription: 'Widget',
+    unitPrice: 150.0,
+    requestedQuantity: 2,
+    allowedOpenDays: 30,
+    ...overrides,
+  });
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -52,14 +67,15 @@ describe('PoImportProcessor', () => {
         },
         {
           provide: PoLineFinancialService,
-          useValue: { reconcilePoLineFinancials: jest.fn().mockResolvedValue({}) },
+          // Phase 2 now uses the batched method, outside the transaction
+          useValue: { reconcileManyPoLines: jest.fn().mockResolvedValue(undefined) },
         },
       ],
     }).compile();
 
-    processor = module.get<PoImportProcessor>(PoImportProcessor);
-    prisma = module.get<PrismaService>(PrismaService);
-    financialService = module.get<PoLineFinancialService>(PoLineFinancialService);
+    processor = module.get(PoImportProcessor);
+    prisma = module.get(PrismaService);
+    financialService = module.get(PoLineFinancialService);
   });
 
   afterEach(() => {
@@ -67,53 +83,23 @@ describe('PoImportProcessor', () => {
   });
 
   it('should process a valid excel import successfully and log SUCCESS', async () => {
-    // Arrange: Create mock background job payload
-    const mockJob = {
-      data: { historyId: 'history-uuid', filePath: 'uploads/test.xlsx' },
-    } as Job;
-
-    // Arrange: Fake data rows returning from your reader and validator
-    const mockValidatedRows: PoExcelRow[] = [
-      {
-        duid: 'DUID001',
-        poNumber: 'PO-1001',
-        projectName: 'Project Alpha',
-        projectCode: 'PA01',
-        prNumber: 'PR-55',
-        poType: 'Standard PO',
-        poLineNumber: '1',
-        pm: 'John Doe',
-        pmId: 'pm-99',
-        poIssuedDate: new Date(),
-        itemCode: 'ITEM-X',
-        itemDescription: 'Widget',
-        unitPrice: 150.0,
-        requestedQuantity: 2,
-        allowedOpenDays: 30,
-      },
-    ];
-
-    // Configure type-safe mock tracking values
-    jest.mocked(readExcel).mockReturnValue(mockValidatedRows);
-    jest.mocked(validateRows).mockReturnValue(mockValidatedRows);
-    jest.mocked(fs.existsSync).mockReturnValue(true);
-
-    // Mock upsert steps inside transaction loops
+    const rows = [makeRow()];
+    jest.mocked(readExcel).mockReturnValue(rows);
+    jest.mocked(validateRows).mockReturnValue(rows);
     mockTxClient.purchaseOrder.upsert.mockResolvedValue({ id: 'po-header-uuid' });
     mockTxClient.purchaseOrderLine.upsert.mockResolvedValue({ id: 'po-line-uuid' });
 
-    // Act: Run background execution engine
-    await processor.process(mockJob);
+    await processor.process(makeJob());
 
-    // Assert: Verify processing pipeline steps
-    expect(readExcel).toHaveBeenCalledWith('uploads/test.xlsx');
+    expect(readExcel).toHaveBeenCalledWith(expect.any(Buffer), 'test.xlsx');
     expect(validateRows).toHaveBeenCalled();
     expect(prisma.$transaction).toHaveBeenCalled();
     expect(mockTxClient.purchaseOrder.upsert).toHaveBeenCalled();
     expect(mockTxClient.purchaseOrderLine.upsert).toHaveBeenCalled();
-    expect(financialService.reconcilePoLineFinancials).toHaveBeenCalledWith(mockTxClient, 'po-line-uuid');
 
-    // Assert: Verify it updated history table record as SUCCESS
+    // Reconciliation is batched and runs after the transaction, with no tx client
+    expect(financialService.reconcileManyPoLines).toHaveBeenCalledWith(['po-line-uuid']);
+
     expect(prisma.poImportHistory.update).toHaveBeenCalledWith({
       where: { id: 'history-uuid' },
       data: {
@@ -124,48 +110,19 @@ describe('PoImportProcessor', () => {
         errors: [],
       },
     });
-
-    // Assert: Check disk physical cleanup occurred
-    expect(fs.unlinkSync).toHaveBeenCalledWith('uploads/test.xlsx');
   });
 
-  it('should catch errors, rollback, and update history table to FAILED if PO Type lookup fails', async () => {
-    // Arrange: Create background job mock
-    const mockJob = {
-      data: { historyId: 'history-uuid', filePath: 'uploads/test.xlsx' },
-    } as Job;
-
-    // Arrange: Structurally complete mock bad rows to satisfy PoExcelRow interface
-    const mockBadRows: PoExcelRow[] = [
-      {
-        duid: 'DUID001',
-        poNumber: 'PO-1001',
-        projectName: 'Project Alpha',
-        projectCode: 'PA01',
-        prNumber: 'PR-55',
-        poType: 'NON_EXISTENT_TYPE', // This will fail map lookup
-        poLineNumber: '1',
-        pm: 'John Doe',
-        pmId: 'pm-99',
-        poIssuedDate: new Date(),
-        itemCode: 'ITEM-X',
-        itemDescription: 'Widget',
-        unitPrice: 150.0,
-        requestedQuantity: 2,
-        allowedOpenDays: 30,
-      },
-    ];
-
-    // Configure type-safe mocks
-    jest.mocked(readExcel).mockReturnValue(mockBadRows);
-    jest.mocked(validateRows).mockReturnValue(mockBadRows);
-    jest.mocked(fs.existsSync).mockReturnValue(true);
+  it('should update history to FAILED and rethrow if the PO Type is unknown', async () => {
+    const rows = [makeRow({ poType: 'NON_EXISTENT_TYPE' })];
+    jest.mocked(readExcel).mockReturnValue(rows);
+    jest.mocked(validateRows).mockReturnValue(rows);
     mockTxClient.purchaseOrder.upsert.mockResolvedValue({ id: 'po-header-uuid' });
 
-    // Act: Run processor loop
-    await processor.process(mockJob);
+    // The processor rethrows after recording the failure
+    await expect(processor.process(makeJob())).rejects.toThrow(
+      /Import script terminated: .*Unknown PO Type: NON_EXISTENT_TYPE/,
+    );
 
-    // Assert: History table must register a FAILED status containing error array log details
     expect(prisma.poImportHistory.update).toHaveBeenCalledWith({
       where: { id: 'history-uuid' },
       data: {
@@ -174,55 +131,31 @@ describe('PoImportProcessor', () => {
       },
     });
 
-    // Assert: File cleanup occurs even under unexpected failures
-    expect(fs.unlinkSync).toHaveBeenCalledWith('uploads/test.xlsx');
+    // Nothing should be reconciled when the transaction failed
+    expect(mockTxClient.purchaseOrderLine.upsert).not.toHaveBeenCalled();
+    expect(financialService.reconcileManyPoLines).not.toHaveBeenCalled();
   });
 
-  it('should update history table to FAILED with a system error if database lookups fail', async () => {
-    // Arrange: Create background job mock
-    const mockJob = {
-      data: { historyId: 'history-uuid', filePath: 'uploads/test.xlsx' },
-    } as Job;
-
-    const mockRows: PoExcelRow[] = [
-      {
-        duid: 'DUID001',
-        poNumber: 'PO-1001',
-        projectName: 'Alpha',
-        projectCode: 'PA01',
-        prNumber: 'PR-55',
-        poType: 'STANDARD_PO',
-        poLineNumber: '1',
-        pm: 'John Doe',
-        pmId: 'pm-99',
-        poIssuedDate: new Date(),
-        itemCode: 'ITEM-X',
-        itemDescription: 'Widget',
-        unitPrice: 10,
-        requestedQuantity: 1,
-        allowedOpenDays: 5,
-      },
-    ];
-
-    // Arrange: Force Prisma database methods to throw an operational exception
+  it('should update history to FAILED with a system error if database lookups fail', async () => {
     jest.spyOn(prisma.poType, 'findMany').mockRejectedValue(new Error('DB Connection Timeout'));
-    jest.mocked(readExcel).mockReturnValue(mockRows);
-    jest.mocked(fs.existsSync).mockReturnValue(true);
+    jest.mocked(readExcel).mockReturnValue([makeRow()]);
 
-    // Act: Execute background processor engine
-    await processor.process(mockJob);
+    await expect(processor.process(makeJob())).rejects.toThrow(/Failed to load validation metadata/);
 
-    // Assert: Check that it intercepts the failure and transforms it into your clean custom error message
     expect(prisma.poImportHistory.update).toHaveBeenCalledWith({
       where: { id: 'history-uuid' },
       data: {
         status: 'FAILED',
-        // ✅ Fixed: Matches the exact fallback string your processor class actually outputs
         errors: [expect.stringContaining('Failed to load validation metadata')],
       },
     });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
 
-    // Assert: File cleanup occurs even under structural infrastructure failures
-    expect(fs.unlinkSync).toHaveBeenCalledWith('uploads/test.xlsx');
+  it('should fail clearly when the job has no file data', async () => {
+    const job = { data: { historyId: 'history-uuid', fileName: 'test.xlsx' } } as unknown as Job;
+
+    // Only passes once you add the `if (!fileBuffer) throw ...` guard to the processor
+    await expect(processor.process(job)).rejects.toThrow(/missing file data/);
   });
 });

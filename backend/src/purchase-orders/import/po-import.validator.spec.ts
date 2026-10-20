@@ -4,7 +4,7 @@ import { BadRequestException } from '@nestjs/common';
 
 describe('validateRows Unit Tests', () => {
   const mockHelpers = {
-    validPoTypeCodes: new Set(['Standard', 'Express']),
+    validPoTypeCodes: new Set(['STANDARD', 'EXPRESS']),
     validPmIds: new Set(['PM-44', 'PM-100']),
   };
 

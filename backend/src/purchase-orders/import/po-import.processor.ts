@@ -21,9 +21,13 @@ export class PoImportProcessor extends WorkerHost {
     const { historyId, fileBuffer, fileName } = job.data;
     let poSucceeded = 0;
     let linesProcessed = 0;
-    const touchedLineIds: string[] = []; // 🔧 collect lines to reconcile after the transaction
+    const touchedLineIds: string[] = []; // collect lines to reconcile after the transaction
 
     try {
+      if (!fileBuffer) {
+        throw new Error('Import job is missing file data');
+      }
+
       const buffer = Buffer.from(fileBuffer, 'base64');
       const rawRows = readExcel(buffer, fileName);
 
@@ -45,7 +49,7 @@ export class PoImportProcessor extends WorkerHost {
       const grouped = this.groupRows(validRows);
       const poTypeMap = new Map(poTypes.map((t) => [t.code, t.id]));
 
-      // 🔧 PHASE 1: Transaction now only does structural writes (PO + PO line upserts).
+      //PHASE 1: Transaction now only does structural writes (PO + PO line upserts).
       // Financial reconciliation moved OUT of the transaction — see Phase 2 below.
       // This is what was blowing past the 60s limit: 5 extra queries per line for
       // reconciliation, run sequentially inside one long-held transaction.
@@ -191,7 +195,6 @@ export class PoImportProcessor extends WorkerHost {
         },
       });
 
-      // 💡 Fix for lines 195/198: Ensure we check if cleanedErrorLines[0] exists safely
       const defaultFallback = 'Database connection aborted';
       throw new Error(`Import script terminated: ${cleanedErrorLines[0] ?? defaultFallback}`);
     }

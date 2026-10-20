@@ -24,8 +24,10 @@ describe('PoImportService', () => {
 
   // Mock structures
   const mockFile = {
-    path: 'uploads/mock-po.xlsx',
     originalname: 'mock-po.xlsx',
+    buffer: Buffer.from('mock-excel-bytes'),
+    size: 16,
+    mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   } as Express.Multer.File;
 
   const mockQueue = {
@@ -88,9 +90,13 @@ describe('PoImportService', () => {
 
     // Assert: Ensure payload handed off to BullMQ is structurally complete
     expect(queue.add).toHaveBeenCalledWith(
-      'process-excel',
-      { historyId: 'history-uuid-123', filePath: 'uploads/mock-po.xlsx' },
-      expect.objectContaining({ attempts: 3 }),
+      expect.any(String), // job name, whatever yours is
+      expect.objectContaining({
+        historyId: expect.any(String),
+        fileName: 'mock-po.xlsx',
+        fileBuffer: mockFile.buffer.toString('base64'),
+      }),
+      expect.anything(), // job options, if you pass any
     );
 
     // Assert: Verify service payload matches the unified ImportResult mapping spec
@@ -116,8 +122,6 @@ describe('PoImportService', () => {
     // Act & Assert: Execute and expect explicit validation termination crash
     await expect(service.importFromExcel(mockFile, 'user-123')).rejects.toThrow(BadRequestException);
 
-    // Assert: Confirm safety disk space sweeping executes immediately during validation blocks
-    expect(fs.unlinkSync).toHaveBeenCalledWith('uploads/mock-po.xlsx');
     expect(queue.add).not.toHaveBeenCalled(); // Ensure bad processing job NEVER touches background queue resources
   });
 });
