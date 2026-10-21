@@ -23,7 +23,7 @@ export class AppController {
     const isMaintenance = this.configService.get<string>('MAINTENANCE_MODE') === 'true';
 
     if (isMaintenance) {
-      // 🟢 503 is the industry standard for Maintenance
+      // 503 is the industry standard for Maintenance
       throw new ServiceUnavailableException({
         status: 'MAINTENANCE',
         message: 'Stecam POFT is undergoing final verification.',
@@ -31,7 +31,7 @@ export class AppController {
       });
     }
 
-    // 🟢 200 OK for Health Monitors (UptimeRobot, Render, AWS)
+    // 200 OK for Health Monitors (UptimeRobot, Render, AWS)
     return {
       status: 'OPERATIONAL',
       app: 'Stecam Nigeria Limited - POFT API',

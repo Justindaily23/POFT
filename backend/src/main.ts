@@ -12,8 +12,9 @@ async function bootstrap() {
 
   const port = process.env.PORT || 3000;
 
+  const origins = (process.env.CORS_ORIGINS ?? '').split(',').map((o) => o.trim()).filter(Boolean);
   app.enableCors({
-    origin: ['http://localhost:5173', 'http://localhost:4173', 'https://stecam.vercel.app'],
+    origin: origins,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     credentials: true,
     maxAge: 3600,
@@ -22,7 +23,7 @@ async function bootstrap() {
 
   app.enableShutdownHooks();
   app.use(cookieParser());
-  app.setGlobalPrefix('api', { exclude: ['/'] });
+  app.setGlobalPrefix('api', { exclude: ['/', 'health'] });
 
   app.useGlobalPipes(
     new ValidationPipe({

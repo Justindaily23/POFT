@@ -35,7 +35,6 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 
-ENV DATABASE_URL=""
 
 # Copy manifests and install production dependencies
 COPY package*.json ./

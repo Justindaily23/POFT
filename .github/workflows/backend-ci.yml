@@ -1,90 +1,7 @@
-# name: Backend CI
-
-# on:
-#   push:
-#     branches: [develop, main]
-
-# concurrency:
-#   group: ${{ github.workflow }}-${{ github.ref }}
-#   cancel-in-progress: true
-
-# jobs:
-#   test-and-build:
-#     runs-on: ubuntu-latest
-
-#     # Spin up a real DB for the E2E tests
-#     services:
-#       postgres:
-#         image: postgres:15
-#         env:
-#           POSTGRES_USER: testuser
-#           POSTGRES_PASSWORD: testpassword
-#           POSTGRES_DB: testdb
-#         ports:
-#           - 5432:5432
-#         options: >-
-#           --health-cmd pg_isready
-#           --health-interval 10s
-#           --health-timeout 5s
-#           --health-retries 5
-
-#       redis:
-#         image: redis:7
-#         ports:
-#           - 6379:6379
-#         options: >-
-#           --health-cmd "redis-cli ping"
-#           --health-interval 10s
-#           --health-timeout 5s
-#           --health-retries 5
-
-#     defaults:
-#       run:
-#         working-directory: backend
-
-#     env:
-#       DATABASE_URL: postgresql://testuser:testpassword@localhost:5432/testdb?schema=public
-#       JWT_SECRET: test_secret_key_123
-#       NODE_ENV: test
-
-#     steps:
-#       - uses: actions/checkout@v4
-
-#       - name: Set up Node
-#         uses: actions/setup-node@v4
-#         with:
-#           node-version: 20
-#           cache: "npm"
-#           cache-dependency-path: backend/package-lock.json
-
-#       - name: Install dependencies
-#         run: npm ci
-
-#       - name: Generate Prisma Client
-#         run: npx prisma generate
-
-#       - name: Run Database Migrations
-#         # Ensures the test DB schema matches your code
-#         run: npx prisma migrate deploy
-
-#       - name: Run E2E Tests
-#         run: npm run test:e2e
-
-#       - name: Lint check
-#         # Highly recommended to catch UI bugs before build
-#         run: npm run lint
-#         continue-on-error: false
-
-#       - name: Build
-#         run: npm run build
-
-
-
-
-
 name: Backend CI
 
 on:
+  workflow_dispatch:
   push:
     branches: [develop, main]
     paths:
@@ -105,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
-    # Spin up a real DB and Redis for the E2E tests
+    # Real Postgres and Redis for the migration check and the container smoke test
     services:
       postgres:
         image: postgres:15
@@ -149,7 +66,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: "npm"
           cache-dependency-path: backend/package-lock.json
 
@@ -159,18 +76,52 @@ jobs:
       - name: Generate Prisma Client
         run: npx prisma generate
 
+      # Non-mutating: fails on problems instead of silently fixing them on the runner.
+      # Needs "lint:check": "eslint \"src/**/*.ts\"" in package.json
       - name: Lint check
-        run: npm run lint
+        run: npm run lint:check
 
       - name: Run Database Migrations
-        # Ensures the test DB schema matches your code
         run: npx prisma migrate deploy
 
-      - name: Debug env
-        run: echo "REDIS_URL=${REDIS_URL:-UNSET}"
-        
-      - name: Run E2E Tests
-        run: npm run test:e2e
+      - name: Unit tests
+        run: npm test -- --ci
 
       - name: Build
         run: npm run build
+
+      # Must run BEFORE the smoke test, which uses this image
+      - name: Build Docker image
+        run: docker build -t poft-backend .
+
+      - name: Smoke test the container
+        run: |
+          docker run -d --name api --network host \
+            -e DATABASE_URL="$DATABASE_URL" \
+            -e REDIS_URL="$REDIS_URL" \
+            -e JWT_SECRET="$JWT_SECRET" \
+            -e JWT_EXPIRES_IN="$JWT_EXPIRES_IN" \
+            -e SMTP_FROM="$SMTP_FROM" \
+            poft-backend
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:3000/health && exit 0
+            sleep 2
+          done
+          docker logs api
+          exit 1
+
+  # deploy:
+  #   needs: test-and-build
+  #   # only deploy on pushes to main, never on pull requests
+  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  #   runs-on: ubuntu-latest
+  #   environment: production # enables required reviewers and environment-scoped secrets
+  #   steps:
+  #     - uses: actions/checkout@v4
+
+  #     # Needs .do/app.yaml in the repo (doctl apps spec get <app-id> > .do/app.yaml)
+  #     # and DIGITALOCEAN_ACCESS_TOKEN in repo Settings > Secrets.
+  #     # Check the action's README for the exact input names.
+  #     - uses: digitalocean/app_action/deploy@v2
+  #       with:
+  #         token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}

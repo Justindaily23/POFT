@@ -3,7 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import { AppModule } from '../../src/app.module';
 import { MailerService } from '@nestjs-modules/mailer';
-import { BullModule, getQueueToken } from '@nestjs/bullmq';
+import { getQueueToken } from '@nestjs/bullmq';
 import { CacheModule } from '@nestjs/cache-manager';
 import { NotificationsService } from '../../src/notifications/notifications.service';
 import { PrismaService } from '@/prisma/prisma.service';
@@ -14,9 +14,9 @@ export async function createTestApp(): Promise<INestApplication> {
   const moduleFixture: TestingModule = await Test.createTestingModule({
     imports: [AppModule],
   })
-    .overrideModule(BullModule)
-    // ✅ Register EVERY queue used in your app to prevent Redis leaks
-    .useModule(BullModule.registerQueue({ name: 'notifications' }, { name: 'po-imports' }))
+    // .overrideModule(BullModule)
+    // // Register EVERY queue used in your app to prevent Redis leaks
+    // .useModule(BullModule.registerQueue({ name: 'notifications' }, { name: 'po-imports' }))
     .overrideProvider(getQueueToken('notifications'))
     .useValue({
       add: jest.fn().mockResolvedValue({ id: 1 }),
@@ -29,22 +29,22 @@ export async function createTestApp(): Promise<INestApplication> {
         ({
           add: jest.fn().mockImplementation(async (name: string, data: any) => {
             if (data?.historyId) {
-              // 1. Mark the import as SUCCESS so the polling loop stops
+              // Mark the import as SUCCESS so the polling loop stops
               await prisma.poImportHistory.updateMany({
                 where: { id: data.historyId },
                 data: { status: 'SUCCESS', poCount: 1, poLineCount: 1 },
               });
 
-              // 2. MANUALLY SEED the data the test is looking for
+              // MANUALLY SEED the data the test is looking for
               // We use 'PO-TEST-001' or extract it to match your uniqueRef
               const mockPo = await prisma.purchaseOrder.create({
                 data: {
                   duid: `DUID-${Date.now()}`,
-                  poNumber: 'PO-TEST-001', // 👈 Ensure this matches your test query
+                  poNumber: 'PO-TEST-001', 
                   projectName: 'Test Project',
                   poLines: {
                     create: {
-                      itemCode: 'ITEM-001', // 👈 This fixes your 'Received: undefined'
+                      itemCode: 'ITEM-001', 
                       itemDescription: 'Sample Description',
                       poLineNumber: '1',
                       contractAmount: 50000,
@@ -60,7 +60,7 @@ export async function createTestApp(): Promise<INestApplication> {
           clean: jest.fn().mockResolvedValue([]),
           on: jest.fn(),
           process: jest.fn(),
-        }) as any, // 👈 Double-cast 'as any' here to kill the 'never' error
+        }) as any, 
       inject: [PrismaService],
     })
 
