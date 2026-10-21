@@ -27,5 +27,5 @@ export async function seedSuperAdmin(prisma: PrismaService, configService: Confi
   });
 
   logger.info(`Super admin created on app launch: ${superAdminEmail}`);
-  console.log(`✅ Super admin seeded: ${superAdminEmail}`);
+  console.log(`Super admin seeded: ${superAdminEmail}`);
 }
