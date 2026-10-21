@@ -8,6 +8,7 @@
   "scripts": {
     "build": "nest build -p tsconfig.build.json",
     "lint": "eslint \"src/**/*.ts\" --fix",
+    "lint:check": "eslint \"{src,apps,libs,test}/**/*.ts\"",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\" \"eslint.config.mjs\"",
     "start": "nest start --watch",
     "start:dev": "cross-env NODE_ENV=development nest start --watch",
