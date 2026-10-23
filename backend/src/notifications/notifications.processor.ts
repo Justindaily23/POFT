@@ -4,13 +4,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { logger } from 'src/common/logger/logger';
 import { EmailTemplates } from './templates/email-templates';
 import { NotificationMapping } from './types/notification-payload.interface';
-import { MailerService } from '@nestjs-modules/mailer';
+import { MailService } from './mail.service';
 
 @Processor('notifications')
 export class NotificationsProcessor extends WorkerHost {
   constructor(
     private prisma: PrismaService,
-    private readonly mailerService: MailerService,
+    private readonly mailService: MailService,
   ) {
     super();
   }
@@ -66,12 +66,7 @@ export class NotificationsProcessor extends WorkerHost {
 
     try {
       // 4. Send via Pooled SMTP Transporter
-      await this.mailerService.sendMail({
-        from: process.env.SMTP_FROM,
-        to: notification.user.email,
-        subject,
-        html,
-      });
+      await this.mailService.send(notification.user.email, subject, html);
 
       // 5. Atomic Update: Mark as sent in DB to prevent duplicates
       await this.prisma.notification.update({

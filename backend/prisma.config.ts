@@ -20,7 +20,7 @@ export default defineConfig({
   schema: 'prisma/schema.prisma',
   datasource: {
     // Falls back gracefully to native process variables if the wrapper helper returns empty
-    url: env('DATABASE_URL') ?? process.env.DATABASE_URL,
+    url: process.env.DIRECT_URL || process.env.DATABASE_URL,
   },
   migrations: {
     //Only attempt to call ts-node if we are NOT running inside our production cloud container

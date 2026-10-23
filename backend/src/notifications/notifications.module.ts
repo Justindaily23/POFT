@@ -3,12 +3,12 @@ import { BullModule } from '@nestjs/bullmq';
 import { NotificationsService } from './notifications.service';
 import { NotificationsProcessor } from './notifications.processor';
 import { NotificationsController } from './notifications.controller';
+import { MailService } from './mail.service';
 
 @Module({
   imports: [
     BullModule.registerQueue({
       name: 'notifications',
-      // ✅ RETRY STRATEGY: Crucial for Production reliability
       defaultJobOptions: {
         attempts: 5,
         backoff: {
@@ -19,7 +19,7 @@ import { NotificationsController } from './notifications.controller';
       },
     }),
   ],
-  providers: [NotificationsService, NotificationsProcessor],
+  providers: [NotificationsService, NotificationsProcessor, MailService],
   exports: [NotificationsService],
   controllers: [NotificationsController],
 })
